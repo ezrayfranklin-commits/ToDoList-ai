@@ -2,7 +2,7 @@
 //   中间: AI 对话面板全占满
 //   右侧: 今日规划竖边栏（时间块列表 + 其他待办）
 // 流程: AI 生成 → 确认 → 执行（勾选/拖拽/增删）。
-// 特效 (v0.9): 超过结束时间仍未完成的时间块 → 七彩光环闪烁提醒。
+// 特效 (v0.13): 当前时刻所在的时间块 → accent 高亮提示; 超时未完成 → 时间变红。
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -46,11 +46,13 @@ function SortableBlock({
   onToggle,
   onClick,
   overdue,
+  current,
 }: {
   block: TimeBlock;
   onToggle: (done: boolean) => void;
   onClick: () => void;
   overdue: boolean;
+  current: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: block.key });
@@ -61,7 +63,7 @@ function SortableBlock({
       className={cn(
         "flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5 transition-shadow",
         isDragging ? "z-10 border-accent/50 shadow-md" : "border-border hover:border-zinc-300",
-        overdue && "overdue-ring border-transparent",
+        current && "border-accent/70 bg-accent/[0.04] shadow-sm",
       )}
     >
       <button
@@ -76,6 +78,7 @@ function SortableBlock({
         className={cn(
           "w-[72px] shrink-0 text-[11px] font-medium tabular-nums text-foreground",
           overdue && "overdue-time",
+          current && "text-accent",
         )}
       >
         {block.start}
@@ -99,6 +102,12 @@ function SortableBlock({
         )}
       </button>
       <div className="min-w-0 flex-1">
+        {current && !block.done && (
+          <div className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold text-accent">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+            现在进行中
+          </div>
+        )}
         <div
           className={cn(
             "cursor-pointer truncate text-[12.5px]",
@@ -166,6 +175,21 @@ export function TodayPage() {
       endD.setDate(endD.getDate() + 1); // end 在次日
     }
     return now.getTime() > endD.getTime();
+  };
+
+  // 当前时刻是否落在该块的时间区间 [start, end) 内（跨午夜视为次日）
+  const isCurrent = (b: TimeBlock): boolean => {
+    if (b.done || !b.start || !b.end) return false;
+    const [sh, sm] = b.start.split(":").map(Number);
+    const [eh, em] = b.end.split(":").map(Number);
+    if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) {
+      return false;
+    }
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const startMin = sh * 60 + sm;
+    let endMin = eh * 60 + em;
+    if (endMin <= startMin) endMin += 24 * 60; // end 在次日
+    return nowMin >= startMin && nowMin < endMin;
   };
 
   const toggleBlock = async (block: TimeBlock, done: boolean) => {
@@ -245,6 +269,7 @@ export function TodayPage() {
                         : toast.info("该时间块尚未关联任务")
                     }
                     overdue={isOverdue(b)}
+                    current={isCurrent(b)}
                   />
                 ))}
               </div>

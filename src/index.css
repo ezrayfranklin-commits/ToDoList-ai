@@ -107,56 +107,6 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* 超时未完成时间块: 边缘七彩光环（v0.9.2, 静态不旋转）                  */
-/* mask 挖空中间只留 2px 边框环, 七彩静态显示, 仅轻微呼吸闪烁          */
-/* ------------------------------------------------------------------ */
-@keyframes ring-breathe {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-.overdue-ring {
-  position: relative;
-  border-radius: 8px;
-}
-
-/* 边框环: 凸出容器 2px, 中间挖空, 静态七彩, 半透明呼吸隐约闪烁 */
-.overdue-ring::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  border-radius: 10px;
-  padding: 2px;
-  background: conic-gradient(
-    from 0deg,
-    #ff0044,
-    #ff8800,
-    #ffee00,
-    #22cc44,
-    #00ccff,
-    #4455ff,
-    #cc44ff,
-    #ff0044
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  animation: ring-breathe 3s ease-in-out infinite;
-  pointer-events: none;
-}
-
-/* 内容层盖在光环之上 */
-.overdue-ring > * {
-  position: relative;
-  z-index: 1;
-}
-
 /* 时间文字超时红色提示 */
 .overdue-time {
   color: #e5484d !important;
