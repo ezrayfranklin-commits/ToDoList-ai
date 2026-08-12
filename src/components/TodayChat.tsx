@@ -29,6 +29,7 @@ import {
 import { getDb } from "@/lib/db";
 import { runPlanning } from "@/lib/agent";
 import { upsertTodayPlanBlock } from "@/lib/planBlocks";
+import { deleteTasksByQuery } from "@/lib/calendar";
 import {
   runChatAgent,
   fallbackIntent,
@@ -146,6 +147,7 @@ export function TodayChat() {
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: qk.plan(today) });
+    qc.invalidateQueries({ queryKey: qk.plans });
     qc.invalidateQueries({ queryKey: qk.tasks });
     qc.invalidateQueries({ queryKey: qk.openTasks });
   };
@@ -348,6 +350,16 @@ export function TodayChat() {
             deleteTask: async (id) => {
               await deleteTask.mutateAsync(id);
               invalidateAll();
+            },
+            deleteTasksByQuery: async (query, opts) => {
+              const res = await deleteTasksByQuery(query, {
+                date: opts?.date ?? null,
+                dateTo: opts?.dateTo ?? null,
+                status: opts?.status ?? null,
+                limit: opts?.limit ?? 30,
+              });
+              invalidateAll();
+              return res;
             },
             insertPlanBlock: async (block) => {
               // DB 直读直写：agent 一轮内多次插入不互相覆盖，

@@ -10,7 +10,7 @@ import {
   parseTimeHint,
   addMinutesToHHmm,
 } from "@/lib/ai/chat";
-import { findOneTask, findTaskCandidates, verifyTaskGone, deleteTasksByQuery } from "@/lib/calendar";
+import { findOneTask, findTaskCandidates, verifyTaskGone } from "@/lib/calendar";
 import type { DailyPlan, Priority, Task } from "@/lib/types";
 import type { PlanResult } from "@/lib/agent";
 
@@ -35,6 +35,13 @@ export interface ToolDeps {
     timeBlockEnd?: string | null;
   }) => Promise<void>;
   deleteTask: (id: number) => Promise<void>;
+  /** 批量删除（纯数据层实现, 由调用方负责刷新缓存） */
+  deleteTasksByQuery: (query: string, opts?: {
+    date?: string | null;
+    dateTo?: string | null;
+    status?: Task["status"] | null;
+    limit?: number;
+  }) => Promise<{ deleted: Task[]; remaining: Task[] } | null>;
   insertPlanBlock: (block: {
     key: string;
     title: string;
@@ -263,7 +270,7 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
         if (!query) return "query 不能为空";
         const date = str(args.date) ? parseTarget(str(args.date)) : null;
         const dateTo = str(args.dateTo) ? parseTarget(str(args.dateTo)) : null;
-        const res = await deleteTasksByQuery(query, { date, dateTo });
+        const res = await deps.deleteTasksByQuery(query, { date, dateTo });
         if (res === null) {
           return `标题包含「${query}」的任务超过 30 个，为避免误删请先缩小范围（加 date/dateTo 限定日期，或用更精确的关键词）再重试`;
         }
