@@ -107,6 +107,32 @@ export function parseDuckDuckGoHtml(html: string, maxResults: number): SearchRes
   return results;
 }
 
+export function parseBingHtml(html: string, maxResults: number): SearchResult[] {
+  const results: SearchResult[] = [];
+  const seen = new Set<string>();
+  // Bing results are <li class="b_algo"> blocks containing <h2><a href="...">Title</a></h2>
+  const blockRe = /<li class="b_algo"[^>]*>([\s\S]*?)<\/li>/g;
+  let m: RegExpExecArray | null;
+  while ((m = blockRe.exec(html)) !== null) {
+    const block = m[1];
+    const linkMatch = block.match(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+    if (!linkMatch) continue;
+    let url = htmlDecode(linkMatch[1]);
+    const title = stripTags(linkMatch[2]);
+    if (!title || title.length < 4) continue;
+    if (!url.startsWith("http")) continue;
+    if (seen.has(url)) continue;
+    const snipMatch = block.match(
+      /<p[^>]*class="[^"]*b_lineclamp[^"]*"[^>]*>([\s\S]*?)<\/p>|<div[^>]*class="[^"]*b_caption[^"]*"[^>]*>([\s\S]*?)<\/div>/,
+    );
+    const snippet = snipMatch ? stripTags(snipMatch[1] ?? snipMatch[2] ?? "") : "";
+    seen.add(url);
+    results.push({ title, url, snippet: snippet.slice(0, 300) });
+    if (results.length >= maxResults) break;
+  }
+  return results;
+}
+
 // ---------------------------------------------------------------------------
 // Fetchers (fetch 可注入: Tauri webview 用 plugin-http, node 测试用原生 fetch)
 // ---------------------------------------------------------------------------
@@ -156,6 +182,29 @@ async function fetchGoogle(
   return results;
 }
 
+async function fetchBing(
+  query: string,
+  maxResults: number,
+  fetchImpl: typeof fetch,
+): Promise<SearchResult[]> {
+  const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=zh-hans&count=${maxResults}`;
+  const resp = await fetchImpl(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      // Bing 会对无浏览器特征请求 302 跳转到 cn.bing.com, 跟随即可
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    },
+    redirect: "follow",
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!resp.ok) throw new Error(`Bing returned HTTP ${resp.status}`);
+  const html = await resp.text();
+  const results = parseBingHtml(html, maxResults);
+  if (results.length === 0) throw new Error("Bing returned no parseable results");
+  return results;
+}
+
 /**
  * Search the web. DuckDuckGo first (Google scraping is unreliable and the
  * user asked for DDG), Google as a fallback when DDG fails.
@@ -185,14 +234,21 @@ export async function webSearch(
       const results = await fetchGoogle(q, n, baseUrl, fetchImpl);
       return { engine: "google (ddg failed: " + (ddgErr as Error).message + ")", results };
     } catch (googleErr) {
-      return {
-        engine: "none",
-        results: [],
-        error:
-          `Search failed on both engines.\n` +
-          `DuckDuckGo error: ${(ddgErr as Error).message}\n` +
-          `Google error: ${(googleErr as Error).message}`,
-      };
+      // Bing last-resort fallback (DuckDuckGo/Google 反爬时可用)
+      try {
+        const results = await fetchBing(q, n, fetchImpl);
+        return { engine: "bing (ddg: " + (ddgErr as Error).message + "; google: " + (googleErr as Error).message + ")", results };
+      } catch (bingErr) {
+        return {
+          engine: "none",
+          results: [],
+          error:
+            `Search failed on all engines.\n` +
+            `DuckDuckGo error: ${(ddgErr as Error).message}\n` +
+            `Google error: ${(googleErr as Error).message}\n` +
+            `Bing error: ${(bingErr as Error).message}`,
+        };
+      }
     }
   }
 }
