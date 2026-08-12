@@ -119,6 +119,26 @@ src/
 src-tauri/     Rust 壳（插件注册 + single-instance 聚焦）
 ```
 
+## 测试: AI 日历增删改查 (agent-crud)
+
+端到端验证「AI 板块 → 日历 CRUD Skill」链路: 用真实模型 (app 里配置的
+provider/model/apiKey) 通过真实 `buildAgentTools` + `runAgentLoop` 执行任务的
+增删改查, 每步由测试脚本独立直查数据库核对 (不信任模型回复), 覆盖防误删
+(多候选必须反馈列表) 与防谎报 (删除后 verify, 找不到必须如实说).
+
+```bash
+node tests/run-agent-crud.mjs
+```
+
+- 模型配置自动从 app 真实 DB 的 `ai.*` settings 读取 (只读); 也可用
+  `TEST_AI_MODEL` / `TEST_AI_APIKEY` / `TEST_AI_BASEURL` 覆盖.
+- 测试用内存 SQLite + fetch shim, 不依赖 Tauri 运行时, 不污染真实数据;
+  通过 esbuild alias 将 `@/lib/db` / `@tauri-apps/*` 替换为 `tests/shim/`.
+- 每次工具调用都会写入测试库的 `agent_runs` (run_type=`tool`), 测试结束打印
+  审计日志, 可追溯每条增删改查实际执行结果.
+- 用例: 增(带日期时间) / 查(按日期) / 改(改期) / 完成 / 删(带日期精确删) /
+  防误删(模糊同名不给日期) / 防谎报(删不存在的任务).
+
 ## 里程碑状态
 
 - [x] M0 骨架：create-tauri-app + Tailwind v4 + shadcn/ui + Drizzle schema
