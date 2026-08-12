@@ -21,16 +21,40 @@ async function runJson(args: string[]): Promise<unknown> {
     throw new Error(`remindctl ${args[0]} failed (${out.code}): ${out.stderr || out.stdout}`);
   }
   const stdout = out.stdout.toString().trim();
-  return stdout ? JSON.parse(stdout) : null;
+  if (!stdout) return null;
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    // status 等命令输出纯文本 (非 JSON): 原样返回字符串
+    return stdout;
+  }
 }
 
 /** Check binary presence + Reminders authorization. */
 export async function checkRemindersBridge(): Promise<BridgeStatus> {
   try {
     const status = await runJson(["status"]);
+    if (typeof status === "string") {
+      // remindctl status 输出纯文本: "Reminders access: granted/denied/Not determined"
+      if (/granted/i.test(status)) {
+        return { installed: true, authorized: true, detail: "已授权，可读取提醒事项/日历" };
+      }
+      if (/denied/i.test(status)) {
+        return {
+          installed: true,
+          authorized: false,
+          detail: "未授权。请在 设置 → 隐私与安全性 → 提醒事项 中允许本应用（或运行 remindctl authorize）",
+        };
+      }
+      return {
+        installed: true,
+        authorized: false,
+        detail: `未授权（${status.trim()}）。运行 remindctl authorize 触发系统授权弹窗`,
+      };
+    }
     const s = status as { authorized?: boolean; message?: string };
     if (s?.authorized) {
-      return { installed: true, authorized: true, detail: "已授权，可读取提醒事项" };
+      return { installed: true, authorized: true, detail: "已授权，可读取提醒事项/日历" };
     }
     return {
       installed: true,
@@ -50,6 +74,18 @@ export async function checkRemindersBridge(): Promise<BridgeStatus> {
             : String(e),
     };
   }
+}
+
+/** 触发系统授权弹窗 (remindctl authorize). 返回新状态. */
+export async function requestBridgeAuthorization(): Promise<BridgeStatus> {
+  try {
+    const cmd = Command.create(BIN, ["authorize"]);
+    const out = await cmd.execute();
+    void out;
+  } catch {
+    // 授权可能弹窗或失败, 以 status 为准
+  }
+  return checkRemindersBridge();
 }
 
 /**

@@ -24,6 +24,13 @@
     "shell:allow-spawn",
     "shell:allow-kill",
     "shell:allow-open",
+    {
+      "identifier": "shell:allow-execute",
+      "description": "Allow running remindctl (Apple Reminders/Calendar CLI bridge) from the frontend.",
+      "allow": [
+        { "name": "remindctl", "cmd": "/opt/homebrew/bin/remindctl", "args": true }
+      ]
+    },
     "sql:default",
     "sql:allow-execute",
     "sql:allow-select",

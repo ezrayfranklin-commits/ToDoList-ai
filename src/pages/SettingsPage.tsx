@@ -41,7 +41,7 @@ import {
 import { toast } from "sonner";
 import { useSettings } from "@/store/settings";
 import { PROVIDERS, pingModel, type ProviderId } from "@/lib/ai/provider";
-import { checkRemindersBridge, type BridgeStatus } from "@/lib/reminders";
+import { checkRemindersBridge, requestBridgeAuthorization, type BridgeStatus } from "@/lib/reminders";
 import { nextRuns } from "@/lib/scheduler";
 import { useCreateGoal, useDeleteGoal, useGoals } from "@/hooks/queries";
 
@@ -127,6 +127,7 @@ export function SettingsPage() {
   const deleteGoal = useDeleteGoal();
 
   const [bridge, setBridge] = useState<BridgeStatus | null>(null);
+  const [bridgeBusy, setBridgeBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [newGoal, setNewGoal] = useState("");
@@ -135,6 +136,18 @@ export function SettingsPage() {
   useEffect(() => {
     checkRemindersBridge().then(setBridge);
   }, []);
+
+  const authorize = async () => {
+    setBridgeBusy(true);
+    const s = await requestBridgeAuthorization();
+    setBridge(s);
+    setBridgeBusy(false);
+    if (s.authorized) {
+      toast.success("已授权，可读取 Apple 提醒事项/日历");
+    } else {
+      toast.info(s.detail);
+    }
+  };
 
   const test = async () => {
     setTesting(true);
@@ -367,6 +380,17 @@ export function SettingsPage() {
             <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
               授权后，规划智能体将读取今日提醒/日历会议，自动避开会议时间排任务。
             </p>
+            <div className="mt-3 flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={bridgeBusy}
+                onClick={authorize}
+              >
+                {bridgeBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Cable className="mr-1 h-3 w-3" />}
+                授权/重新检测
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
