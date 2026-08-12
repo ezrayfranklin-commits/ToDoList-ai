@@ -4,9 +4,11 @@
 
 import Database from "@tauri-apps/plugin-sql";
 import migration0000 from "@/db/migrations/0000_curly_norman_osborn.sql?raw";
+import migration0001 from "@/db/migrations/0001_windy_mystique.sql?raw";
 
 const MIGRATIONS: Array<{ id: string; sql: string }> = [
   { id: "0000_curly_norman_osborn", sql: migration0000 },
+  { id: "0001_windy_mystique", sql: migration0001 },
 ];
 
 export const DB_NAME = "sqlite:todolist.db";

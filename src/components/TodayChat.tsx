@@ -1,28 +1,27 @@
 // Today page dialogue panel (首页中央 AI 对话面板, 全屏占满).
+// ChatGPT 式多会话：消息持久化到 SQLite（chat_conversations /
+// chat_messages），会话由左侧边栏切换/新建；本组件只负责渲染与发送。
+// 首条用户消息自动作为会话标题；模型上下文携带最近 8 条历史。
 // 与左右栏融为一体：无卡片边框、无分隔线，仅靠留白与气泡区分。
-// AI 气泡在左、用户气泡在右；指令执行后自动刷新右侧待办列表。
-// 组件全部由 shadcn/ui 现成组件拼装（Input/Button + lucide 图标）。
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import {
-  Loader2,
-  MessageSquareText,
-  Send,
-  Sparkles,
-  Wand2,
-} from "lucide-react";
+import { Loader2, MessageSquareText, Send, Sparkles, Wand2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   qk,
+  useAddMessage,
+  useCreateConversation,
+  useInboxTasks,
+  useMessages,
+  usePlan,
+  useRenameConversation,
+  useTasksByDate,
   useCreateTask,
   useDeleteTask,
-  useInboxTasks,
-  usePlan,
-  useTasksByDate,
   useToggleTask,
   useUpdateTask,
 } from "@/hooks/queries";
@@ -30,21 +29,13 @@ import { runPlanning } from "@/lib/agent";
 import { runChatAgent, findTask, parseTarget, type ChatContext } from "@/lib/ai/chat";
 import { todayStr, tomorrowStr } from "@/lib/dates";
 import { useSettings } from "@/store/settings";
+import { useUI } from "@/store/ui";
 import { cn } from "@/lib/utils";
-
-interface ChatMsg {
-  id: number;
-  role: "user" | "ai";
-  text: string;
-  time: string;
-}
-
-let msgId = 0;
 
 function greeting(planStatus: ChatContext["planStatus"], blockCount: number): string {
   switch (planStatus) {
     case "draft":
-      return `AI 已生成今日计划草稿（${blockCount} 个时间块）。可以直接说「确认」，或让我「重新规划」；也可以拖拽下方时间块调整。`;
+      return `AI 已生成今日计划草稿（${blockCount} 个时间块）。可以直接说「确认」，或让我「重新规划」；也可以拖拽右侧时间块调整。`;
     case "confirmed":
       return "今日计划已确认，开工吧！可以随时对我说：「加任务：…」「把 … 顺延到明天」「完成 …」。";
     default:
@@ -56,13 +47,26 @@ export function TodayChat() {
   const today = todayStr();
   const settings = useSettings();
   const qc = useQueryClient();
+  const { currentConversationId, setCurrentConversation } = useUI();
+
   const { data: plan } = usePlan(today);
   const { data: todayTasks } = useTasksByDate(today);
   const { data: inbox } = useInboxTasks();
+  const { data: msgs, isLoading: msgsLoading } = useMessages(currentConversationId);
+
   const createTask = useCreateTask();
   const toggleTask = useToggleTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const createConversation = useCreateConversation();
+  const addMessage = useAddMessage();
+  const renameConversation = useRenameConversation();
+
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
 
   const planStatus: ChatContext["planStatus"] = !plan
     ? "none"
@@ -71,23 +75,23 @@ export function TodayChat() {
       : plan.status;
   const blockCount = plan?.data?.timeBlocks.length ?? 0;
 
-  const [msgs, setMsgs] = useState<ChatMsg[]>(() => [
-    { id: ++msgId, role: "ai", text: greeting(planStatus, blockCount), time: format(new Date(), "HH:mm") },
-  ]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // 无当前会话时自动新建（ChatGPT 打开即有一个新对话）
+  useEffect(() => {
+    if (currentConversationId == null && !busyRef.current) {
+      createConversation.mutateAsync().then((id) => setCurrentConversation(id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentConversationId]);
 
+  // 消息变化时滚到底部
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [msgs, busy]);
 
-  const push = (role: "user" | "ai", text: string) => {
-    setMsgs((prev) => [
-      ...prev,
-      { id: ++msgId, role, text, time: format(new Date(), "HH:mm") },
-    ]);
-  };
+  const historyForModel = useMemo(() => {
+    const list = msgs ?? [];
+    return list.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+  }, [msgs]);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: qk.plan(today) });
@@ -96,7 +100,10 @@ export function TodayChat() {
   };
 
   /** Execute a structured intent, returning the reply to show. */
-  const execute = async (intent: Awaited<ReturnType<typeof runChatAgent>>, raw: string): Promise<string> => {
+  const execute = async (
+    intent: Awaited<ReturnType<typeof runChatAgent>>,
+    raw: string,
+  ): Promise<string> => {
     const tasks = todayTasks ?? [];
     const inboxTasks = inbox ?? [];
     switch (intent.action) {
@@ -108,7 +115,7 @@ export function TodayChat() {
           return `规划失败了：${res.error}。请到「设置」里检查模型与 API 配置。`;
         }
         const n = res.plan?.data?.timeBlocks.length ?? 0;
-        return `已生成今日计划草稿（${n} 个时间块），确认无误后点下方「确认计划」，或继续让我调整。`;
+        return `已生成今日计划草稿（${n} 个时间块），确认无误后点右侧「确认计划」，或继续让我调整。`;
       }
       case "add_task": {
         const title = intent.taskTitle || raw.replace(/^加(?:个)?任务[:：]?\s*/, "").trim();
@@ -153,11 +160,27 @@ export function TodayChat() {
 
   const send = async (textOverride?: string) => {
     const text = (textOverride ?? input).trim();
-    if (!text || busy) return;
+    if (!text || busyRef.current) return;
+    busyRef.current = true;
     setInput("");
-    push("user", text);
     setBusy(true);
     try {
+      // 确保会话存在（ChatGPT：没有会话就先新建）
+      let convId = currentConversationId;
+      if (convId == null) {
+        convId = await createConversation.mutateAsync();
+        setCurrentConversation(convId);
+      }
+
+      await addMessage.mutateAsync({ conversationId: convId, role: "user", content: text });
+
+      // 首条用户消息 → 自动命名会话（ChatGPT 对应逻辑）
+      const isFirst = (msgs ?? []).length === 0;
+      if (isFirst) {
+        const title = text.length > 18 ? `${text.slice(0, 18)}…` : text;
+        await renameConversation.mutateAsync({ id: convId, title });
+      }
+
       const ctx: ChatContext = {
         date: today,
         planStatus,
@@ -165,12 +188,24 @@ export function TodayChat() {
         todayTasks: todayTasks ?? [],
         inboxTasks: inbox ?? [],
       };
-      const intent = await runChatAgent(text, ctx, settings);
+      const intent = await runChatAgent(text, ctx, settings, [
+        ...historyForModel,
+        { role: "user", content: text },
+      ]);
       const reply = await execute(intent, text);
-      push("ai", reply);
+      await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
     } catch (e) {
-      push("ai", `出错了：${e instanceof Error ? e.message : String(e)}`);
+      toast.error(e instanceof Error ? e.message : "发送失败");
+      const convId = currentConversationId;
+      if (convId != null) {
+        await addMessage.mutateAsync({
+          conversationId: convId,
+          role: "ai",
+          content: `出错了：${e instanceof Error ? e.message : String(e)}`,
+        });
+      }
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -180,6 +215,17 @@ export function TodayChat() {
     { label: "加任务", cmd: "加任务：" },
     { label: "重新规划", cmd: "重新规划" },
   ];
+
+  const chipClick = (cmd: string) => {
+    if (cmd === "加任务：") {
+      // 预填输入框，让用户补全任务名（避免发送空指令）
+      setInput(cmd);
+    } else {
+      send(cmd);
+    }
+  };
+
+  const showGreeting = !msgsLoading && (msgs ?? []).length === 0 && !busy;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -201,28 +247,45 @@ export function TodayChat() {
         ref={scrollRef}
         className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3"
       >
-        {msgs.map((m) =>
+        {showGreeting && (
+          <div className="flex items-end gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <Sparkles className="h-3 w-3" />
+            </span>
+            <div className="max-w-[78%] rounded-xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm">
+              {greeting(planStatus, blockCount)}
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                {format(new Date(), "HH:mm")}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(msgs ?? []).map((m) =>
           m.role === "ai" ? (
             <div key={m.id} className="flex items-end gap-2">
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Sparkles className="h-3 w-3" />
               </span>
               <div className="max-w-[78%] rounded-xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm">
-                {m.text}
-                <div className="mt-1 text-[10px] text-muted-foreground">{m.time}</div>
+                {m.content}
+                <div className="mt-1 text-[10px] text-muted-foreground">
+                  {format(new Date(m.createdAt + "Z"), "HH:mm")}
+                </div>
               </div>
             </div>
           ) : (
             <div key={m.id} className="flex items-end justify-end gap-2">
               <div className="max-w-[78%] rounded-xl rounded-br-sm bg-accent px-3.5 py-2.5 text-[13px] leading-relaxed text-accent-foreground shadow-sm">
-                {m.text}
+                {m.content}
                 <div className="mt-1 text-right text-[10px] text-accent-foreground/70">
-                  {m.time}
+                  {format(new Date(m.createdAt + "Z"), "HH:mm")}
                 </div>
               </div>
             </div>
           ),
         )}
+
         {busy && (
           <div className="flex items-end gap-2">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
@@ -242,9 +305,11 @@ export function TodayChat() {
           {chips.map((c) => (
             <button
               key={c.label}
-              onClick={() => send(c.cmd)}
+              onClick={() => chipClick(c.cmd)}
               disabled={busy}
-              className="flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition-colors duration-200 hover:border-accent hover:text-accent disabled:opacity-50"
+              className={cn(
+                "flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground transition-colors duration-200 hover:border-accent hover:text-accent disabled:opacity-50",
+              )}
             >
               <Wand2 className="h-3 w-3" />
               {c.label}

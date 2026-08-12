@@ -22,6 +22,12 @@ export interface ChatContext {
   inboxTasks: Task[];
 }
 
+/** 最近对话历史（ChatGPT 式上下文连贯，由调用方从会话消息截取）。 */
+export interface ChatHistoryItem {
+  role: "user" | "ai";
+  content: string;
+}
+
 const CHAT_SYSTEM = `你是 TodoList AI 的对话助手，用户通过自然语言指挥待办应用。
 判断用户意图并输出结构化结果：
 - "规划今天"/"重新规划" → plan 或 replan（已有计划则 replan）
@@ -103,6 +109,7 @@ export async function runChatAgent(
   message: string,
   ctx: ChatContext,
   settings: AISettings,
+  history: ChatHistoryItem[] = [],
 ): Promise<ChatIntent> {
   const statusBrief = {
     date: ctx.date,
@@ -116,7 +123,13 @@ export async function runChatAgent(
     })),
     inboxCount: ctx.inboxTasks.length,
   };
-  const prompt = `用户消息：${message}\n\n当前状态：${JSON.stringify(statusBrief)}\n\n请判断意图并回复。`;
+  const historyBlock =
+    history.length > 0
+      ? `\n\n最近对话：\n${history
+          .map((h) => `${h.role === "user" ? "用户" : "助手"}：${h.content}`)
+          .join("\n")}`
+      : "";
+  const prompt = `用户消息：${message}${historyBlock}\n\n当前状态：${JSON.stringify(statusBrief)}\n\n请判断意图并回复。`;
   try {
     let intent: ChatIntent;
     if (settings.provider === "ollama") {

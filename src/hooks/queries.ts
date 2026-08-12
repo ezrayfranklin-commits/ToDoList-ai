@@ -25,6 +25,8 @@ export const qk = {
   goals: ["goals"] as const,
   runs: ["runs"] as const,
   stats: ["stats"] as const,
+  conversations: ["chat", "conversations"] as const,
+  messages: (convId: number) => ["chat", "messages", convId] as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -333,8 +335,113 @@ export function useDeleteGoal() {
 }
 
 // ---------------------------------------------------------------------------
-// Stats (review page)
+// Chat conversations & messages (ChatGPT-style history)
 // ---------------------------------------------------------------------------
+
+export interface Conversation {
+  id: number;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  conversationId: number;
+  role: "user" | "ai";
+  content: string;
+  createdAt: string;
+}
+
+export function useConversations() {
+  return useQuery({
+    queryKey: qk.conversations,
+    queryFn: async () =>
+      (await getDb().select<Conversation[]>(
+        "SELECT * FROM chat_conversations ORDER BY updated_at DESC, id DESC",
+      )) as unknown as Conversation[],
+  });
+}
+
+export function useMessages(conversationId: number | null) {
+  return useQuery({
+    queryKey: qk.messages(conversationId ?? -1),
+    enabled: conversationId != null,
+    queryFn: async () =>
+      (await getDb().select<ChatMessage[]>(
+        "SELECT * FROM chat_messages WHERE conversation_id = $1 ORDER BY id ASC",
+        [conversationId],
+      )) as unknown as ChatMessage[],
+  });
+}
+
+export function useCreateConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (): Promise<number> => {
+      const res = await getDb().execute(
+        "INSERT INTO chat_conversations (title) VALUES ('新对话')",
+      );
+      return Number(res.lastInsertId ?? 0);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.conversations }),
+  });
+}
+
+export function useRenameConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, title }: { id: number; title: string }) => {
+      await getDb().execute(
+        "UPDATE chat_conversations SET title = $1, updated_at = datetime('now') WHERE id = $2",
+        [title, id],
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.conversations }),
+  });
+}
+
+export function useDeleteConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      // 手动两步删除：tauri-plugin-sql 连接池未启用 SQLite foreign_keys
+      // PRAGMA，FK 级联不可靠，先删消息再删会话
+      const db = getDb();
+      await db.execute("DELETE FROM chat_messages WHERE conversation_id = $1", [id]);
+      await db.execute("DELETE FROM chat_conversations WHERE id = $1", [id]);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.conversations });
+      qc.invalidateQueries({ queryKey: ["chat"] });
+    },
+  });
+}
+
+export function useAddMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      conversationId: number;
+      role: "user" | "ai";
+      content: string;
+    }) => {
+      const db = getDb();
+      await db.execute(
+        "INSERT INTO chat_messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+        [input.conversationId, input.role, input.content],
+      );
+      await db.execute(
+        "UPDATE chat_conversations SET updated_at = datetime('now') WHERE id = $1",
+        [input.conversationId],
+      );
+    },
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: qk.messages(v.conversationId) });
+      qc.invalidateQueries({ queryKey: qk.conversations });
+    },
+  });
+}
 
 export function useDayStats(dateStr: string) {
   return useQuery({

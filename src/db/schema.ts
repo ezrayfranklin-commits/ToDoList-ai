@@ -115,3 +115,35 @@ export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value"),
 });
+
+// ---------------------------------------------------------------------------
+// Chat history (ChatGPT-style conversations, 首页对话会话)
+// ---------------------------------------------------------------------------
+
+export const chatConversations = sqliteTable("chat_conversations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  // derived from the first user message, e.g. "加任务：买咖啡"
+  title: text("title").notNull().default("新对话"),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const chatMessages = sqliteTable(
+  "chat_messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    conversationId: integer("conversation_id")
+      .notNull()
+      .references(() => chatConversations.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["user", "ai"] }).notNull(),
+    content: text("content").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [index("chat_messages_conv_idx").on(t.conversationId)],
+);
