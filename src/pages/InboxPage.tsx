@@ -105,7 +105,7 @@ export function InboxPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-6 py-8">
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Inbox</h1>

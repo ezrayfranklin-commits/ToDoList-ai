@@ -171,7 +171,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-6 py-8">
       <div className="mb-6">
         <h1 className="text-xl font-bold tracking-tight">设置</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">

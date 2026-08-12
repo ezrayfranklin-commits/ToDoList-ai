@@ -77,7 +77,7 @@ export function ReviewPage() {
   const dateLabel = format(new Date(dateStr + "T00:00:00"), "M月d日 EEEE", { locale: zhCN });
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto px-6 py-8">
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">复盘</h1>

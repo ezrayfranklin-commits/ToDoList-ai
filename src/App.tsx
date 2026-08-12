@@ -57,7 +57,7 @@ function Shell() {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-hidden">
         {view === "today" && <TodayPage />}
         {view === "inbox" && <InboxPage />}
         {view === "review" && <ReviewPage />}
