@@ -39,6 +39,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { toast } from "sonner";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettings } from "@/store/settings";
 import { PROVIDERS, pingModel, type ProviderId } from "@/lib/ai/provider";
 import { checkRemindersBridge, requestBridgeAuthorization, type BridgeStatus } from "@/lib/reminders";
@@ -146,6 +147,16 @@ export function SettingsPage() {
       toast.success("已授权，可读取 Apple 提醒事项/日历");
     } else {
       toast.info(s.detail);
+    }
+  };
+
+  const openRemindersSettings = async () => {
+    try {
+      await openUrl(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders",
+      );
+    } catch {
+      toast.error("无法打开系统设置，请手动打开 系统设置 → 隐私与安全性 → 提醒事项");
     }
   };
 
@@ -390,7 +401,15 @@ export function SettingsPage() {
                 {bridgeBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Cable className="mr-1 h-3 w-3" />}
                 授权/重新检测
               </Button>
+              <Button size="sm" variant="outline" onClick={openRemindersSettings}>
+                <Target className="mr-1 h-3 w-3" />
+                打开系统设置
+              </Button>
             </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              macOS 开发模式下应用未签名，无法自动弹授权窗。请点「打开系统设置」→ 在「提醒事项」中
+              勾选允许 remindctl（或 Terminal），然后点「授权/重新检测」。
+            </p>
           </CardContent>
         </Card>
 

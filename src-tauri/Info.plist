@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSRemindersUsageDescription</key>
+	<string>读取您的 Apple 提醒事项与日历，用于规划时自动避开会议时间排任务。</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>读取您的日历会议，规划时自动避开会议时间。</string>
+</dict>
+</plist>
