@@ -27,7 +27,7 @@ import {
 } from "@/hooks/queries";
 import { runPlanning } from "@/lib/agent";
 import { runChatAgent, findTask, parseTarget, type ChatContext } from "@/lib/ai/chat";
-import { todayStr, tomorrowStr } from "@/lib/dates";
+import { formatDbTime, todayStr, tomorrowStr } from "@/lib/dates";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
 import { cn } from "@/lib/utils";
@@ -270,7 +270,7 @@ export function TodayChat() {
               <div className="max-w-[78%] rounded-xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm">
                 {m.content}
                 <div className="mt-1 text-[10px] text-muted-foreground">
-                  {format(new Date(m.createdAt + "Z"), "HH:mm")}
+                  {formatDbTime(m.createdAt)}
                 </div>
               </div>
             </div>
@@ -279,7 +279,7 @@ export function TodayChat() {
               <div className="max-w-[78%] rounded-xl rounded-br-sm bg-accent px-3.5 py-2.5 text-[13px] leading-relaxed text-accent-foreground shadow-sm">
                 {m.content}
                 <div className="mt-1 text-right text-[10px] text-accent-foreground/70">
-                  {format(new Date(m.createdAt + "Z"), "HH:mm")}
+                  {formatDbTime(m.createdAt)}
                 </div>
               </div>
             </div>

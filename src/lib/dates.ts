@@ -28,3 +28,20 @@ export const weekdayCN = (d: Date): string =>
 
 /** Current time as HH:mm */
 export const nowHHmm = (): string => format(new Date(), "HH:mm");
+
+/**
+ * Parse SQLite datetime strings ("YYYY-MM-DD HH:MM:SS", UTC) safely.
+ * WKWebView/Safari rejects the space+Z form (returns Invalid Date), while
+ * V8 accepts it — so normalize to ISO 8601 before parsing. Never throws.
+ */
+export function parseDbTime(t: string | null | undefined): Date {
+  if (!t) return new Date(NaN);
+  const iso = t.includes("T") ? t : t.replace(" ", "T");
+  return new Date(iso.endsWith("Z") ? iso : `${iso}Z`);
+}
+
+/** Format a DB datetime; returns "" for invalid input (never throws). */
+export function formatDbTime(t: string | null | undefined, fmt = "HH:mm"): string {
+  const d = parseDbTime(t);
+  return Number.isNaN(d.getTime()) ? "" : format(d, fmt);
+}

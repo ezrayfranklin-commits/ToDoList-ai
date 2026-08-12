@@ -12,6 +12,7 @@ import { ReviewPage } from "@/pages/ReviewPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { useUI } from "@/store/ui";
 import { useSettings } from "@/store/settings";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { startScheduler, stopScheduler } from "@/lib/scheduler";
 import { runPlanning, runReview } from "@/lib/agent";
 import { todayStr } from "@/lib/dates";
@@ -56,16 +57,18 @@ function Shell() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
-      <Sidebar />
-      <main className="flex-1 overflow-hidden">
-        {view === "today" && <TodayPage />}
-        {view === "inbox" && <InboxPage />}
-        {view === "review" && <ReviewPage />}
-        {view === "settings" && <SettingsPage />}
-      </main>
-      <CommandPalette />
-      <TaskDialog />
-      <Toaster position="bottom-right" richColors closeButton />
+      <ErrorBoundary>
+        <Sidebar />
+        <main className="flex-1 overflow-hidden">
+          <ErrorBoundary>{view === "today" && <TodayPage />}</ErrorBoundary>
+          <ErrorBoundary>{view === "inbox" && <InboxPage />}</ErrorBoundary>
+          <ErrorBoundary>{view === "review" && <ReviewPage />}</ErrorBoundary>
+          <ErrorBoundary>{view === "settings" && <SettingsPage />}</ErrorBoundary>
+        </main>
+        <CommandPalette />
+        <TaskDialog />
+        <Toaster position="bottom-right" richColors closeButton />
+      </ErrorBoundary>
     </div>
   );
 }
