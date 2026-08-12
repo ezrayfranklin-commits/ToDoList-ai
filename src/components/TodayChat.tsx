@@ -63,6 +63,13 @@ function MarkdownContent({ text }: { text: string }) {
   );
 }
 
+function timeGreeting(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return "早上好";
+  if (h >= 12 && h < 18) return "中午好";
+  return "晚上好";
+}
+
 function greeting(planStatus: ChatContext["planStatus"], blockCount: number): string {
   switch (planStatus) {
     case "draft":
@@ -70,7 +77,7 @@ function greeting(planStatus: ChatContext["planStatus"], blockCount: number): st
     case "confirmed":
       return "今日计划已确认，开工吧！可以随时对我说：「加任务：…」「把 … 顺延到明天」「完成 …」。";
     default:
-      return "早上好！我是你的 AI 助手。可以问我问题（我会联网搜索），或直接吩咐我记任务、改任务。";
+      return `${timeGreeting()}！我是你的 AI 助手。可以问我问题（我会联网搜索），或直接吩咐我记任务、改任务。`;
   }
 }
 
