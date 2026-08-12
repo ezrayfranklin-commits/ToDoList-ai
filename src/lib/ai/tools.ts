@@ -190,7 +190,7 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "plan_today",
       description:
-        "生成/重新生成今日计划（AI 读取待办、Inbox、目标后排出时间块草稿，需要用户在界面确认）。",
+        "生成/重新生成今日计划（一次性生成整个时间块草稿）。当用户说「规划今天」「安排今天的日程」「帮我排一下今天」时使用本工具，不要用 add_task 逐条添加。",
       parameters: {
         type: "object",
         properties: { force: { type: "string", description: "固定填 yes" } },

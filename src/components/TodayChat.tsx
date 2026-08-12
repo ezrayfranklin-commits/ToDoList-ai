@@ -27,6 +27,7 @@ import {
   useUpdateTask,
 } from "@/hooks/queries";
 import { runPlanning } from "@/lib/agent";
+import { upsertTodayPlanBlock } from "@/lib/planBlocks";
 import {
   runChatAgent,
   fallbackIntent,
@@ -171,24 +172,19 @@ export function TodayChat() {
         });
         invalidateAll();
         const taskId = Number(res.lastInsertId ?? 0);
-        // 今天且给了时刻、今日已有计划（草稿/已确认）→ 插入计划时间块（按时间排序）
+        // 今天 + 有时刻 → 写入今日计划时间块（DB 直写，无计划自动建 draft）
         let insertedBlock = false;
-        if (scheduledDate === today && start && taskId > 0 && plan?.data) {
-          const blocks = plan.data.timeBlocks ?? [];
-          const next = [
-            ...blocks,
-            {
-              key: `task:${taskId}`,
-              title,
-              start,
-              end: end ?? addMinutesToHHmm(start, 60),
-              priority: "medium" as const,
-              effort: "1小时",
-              taskId,
-              done: false,
-            },
-          ].sort((a, b) => a.start.localeCompare(b.start));
-          await updateBlocks.mutateAsync({ plan, blocks: next });
+        if (scheduledDate === today && start && taskId > 0) {
+          await upsertTodayPlanBlock({
+            key: `task:${taskId}`,
+            title,
+            start,
+            end: end ?? addMinutesToHHmm(start, 60),
+            priority: "medium",
+            effort: "1小时",
+            taskId,
+            done: false,
+          });
           insertedBlock = true;
         }
         const when =
@@ -339,11 +335,9 @@ export function TodayChat() {
               invalidateAll();
             },
             insertPlanBlock: async (block) => {
-              if (!plan?.data) return;
-              const blocks = [...plan.data.timeBlocks, block].sort((a, b) =>
-                a.start.localeCompare(b.start),
-              );
-              await updateBlocks.mutateAsync({ plan, blocks });
+              // DB 直读直写：agent 一轮内多次插入不互相覆盖，
+              // 今日无计划时自动创建 draft（v0.8.1 修复）
+              await upsertTodayPlanBlock(block);
               invalidateAll();
             },
             runPlanning: async (date) => {
