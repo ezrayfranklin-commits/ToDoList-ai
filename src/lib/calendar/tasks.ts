@@ -197,6 +197,61 @@ export async function verifyTaskGone(id: number): Promise<boolean> {
   return (rows[0]?.c ?? 0) === 0;
 }
 
+/**
+ * 批量删除: 按标题关键词 + 可选日期范围/状态, 删除全部命中任务.
+ * 返回已删任务列表 (供工具转述), 每个删除都联动清理计划块.
+ * 上限防误删: 超过 limit 条时不做任何删除, 返回 null 让调用方确认范围.
+ */
+export async function deleteTasksByQuery(
+  query: string,
+  opts: {
+    date?: string | null;
+    dateTo?: string | null;
+    status?: Task["status"] | null;
+    limit?: number;
+  } = {},
+): Promise<{ deleted: Task[]; remaining: Task[] } | null> {
+  const q = query.trim();
+  if (!q) return { deleted: [], remaining: [] };
+  const cap = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+  const conds: string[] = [];
+  const vals: unknown[] = [];
+  conds.push(`title LIKE $${vals.length + 1}`);
+  vals.push(`%${q}%`);
+  if (opts.date) {
+    conds.push(`scheduled_date >= $${vals.length + 1}`);
+    vals.push(opts.date);
+  }
+  if (opts.dateTo) {
+    conds.push(`scheduled_date <= $${vals.length + 1}`);
+    vals.push(opts.dateTo);
+  }
+  if (opts.status) {
+    conds.push(`status = $${vals.length + 1}`);
+    vals.push(opts.status);
+  }
+  const sql = `SELECT * FROM tasks WHERE ${conds.join(" AND ")}
+    ORDER BY scheduled_date IS NULL, scheduled_date ASC, time_block_start IS NULL, time_block_start ASC, id ASC`;
+  const rows = (await getDb().select<Array<Record<string, unknown>>>(
+    sql,
+    vals,
+  )) as unknown as Array<Record<string, unknown>>;
+  const all = rows.map(toTask);
+  if (all.length > cap) return null; // 超过上限: 不删除, 交由调用方确认范围
+  const deleted: Task[] = [];
+  for (const t of all) {
+    await deleteTask(t.id);
+    deleted.push(t);
+  }
+  // 删除后复核: 确认全部消失 (防谎报)
+  const leftRows = (await getDb().select<Array<Record<string, unknown>>>(
+    sql,
+    vals,
+  )) as unknown as Array<Record<string, unknown>>;
+  const remaining = leftRows.map(toTask);
+  return { deleted, remaining };
+}
+
 /** 按 id 读取单个任务. */
 export async function getTaskById(id: number): Promise<Task | null> {
   const rows = (await getDb().select<Array<Record<string, unknown>>>(

@@ -400,7 +400,7 @@ export function TodayChat() {
               }));
             },
           }),
-          maxTurns: 6,
+          maxTurns: 12,
           signal: ctrl.signal,
         });
         reply = result.reply;

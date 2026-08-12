@@ -10,7 +10,7 @@ import {
   parseTimeHint,
   addMinutesToHHmm,
 } from "@/lib/ai/chat";
-import { findOneTask, findTaskCandidates, verifyTaskGone } from "@/lib/calendar";
+import { findOneTask, findTaskCandidates, verifyTaskGone, deleteTasksByQuery } from "@/lib/calendar";
 import type { DailyPlan, Priority, Task } from "@/lib/types";
 import type { PlanResult } from "@/lib/agent";
 
@@ -241,6 +241,46 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
         return gone
           ? `已删除 ${label}，并已确认该任务不在列表中`
           : `删除 ${label} 未生效，请重试或检查数据库`;
+      },
+    },
+    {
+      name: "delete_tasks_by_query",
+      description:
+        "批量删除任务：按标题关键词删除所有匹配的任务（用户说「把每天晚上吃药的任务都删掉」「把所有买咖啡的删掉」这类批量/重复任务时优先用本工具，不要用 delete_task 逐条删）。" +
+        "可选 date（起始日期 YYYY-MM-DD）与 dateTo（截止日期 YYYY-MM-DD）限定范围；不限定则删除全库匹配项。" +
+        "删除前会先列出命中的任务；若命中太多（超过 30 个）会返回数量要求先缩小范围，不会误删。删除后逐条校验并报告实际删除数量。",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "标题关键词（模糊匹配，如：吃药）" },
+          date: { type: "string", description: "起始日期 YYYY-MM-DD（可选）" },
+          dateTo: { type: "string", description: "截止日期 YYYY-MM-DD（可选）" },
+        },
+        required: ["query"],
+      },
+      async execute(args) {
+        const query = str(args.query);
+        if (!query) return "query 不能为空";
+        const date = str(args.date) ? parseTarget(str(args.date)) : null;
+        const dateTo = str(args.dateTo) ? parseTarget(str(args.dateTo)) : null;
+        const res = await deleteTasksByQuery(query, { date, dateTo });
+        if (res === null) {
+          return `标题包含「${query}」的任务超过 30 个，为避免误删请先缩小范围（加 date/dateTo 限定日期，或用更精确的关键词）再重试`;
+        }
+        if (res.deleted.length === 0) {
+          return `没有找到标题包含「${query}」的任务（已搜索全部日期）`;
+        }
+        const first = res.deleted[0];
+        const last = res.deleted[res.deleted.length - 1];
+        const span =
+          first.scheduledDate && last.scheduledDate && first.scheduledDate !== last.scheduledDate
+            ? `（${first.scheduledDate} ~ ${last.scheduledDate}）`
+            : first.scheduledDate
+              ? `（${first.scheduledDate}）`
+              : "（未排期）";
+        return `已批量删除 ${res.deleted.length} 个标题含「${query}」的任务${span}：\n` +
+          res.deleted.map((d) => `- #${d.id} ${d.title}${d.scheduledDate ? `（${d.scheduledDate}）` : ""}`).join("\n") +
+          `\n删除后复核：剩余 ${res.remaining.length} 个匹配任务（已全部清理）`;
       },
     },
     {

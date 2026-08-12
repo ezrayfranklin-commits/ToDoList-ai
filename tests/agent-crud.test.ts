@@ -285,8 +285,8 @@ function buildCases(): Case[] {
       },
     },
     {
-      name: "防误删: 模糊删除未给日期时不应擅自删除",
-      message: "帮我把买咖啡的任务删掉",
+      name: "防误删: 单数那个且未给日期时应反馈候选",
+      message: "把那个买咖啡的任务删掉",
       verify: () => {
         // 剩余 12号/30号 两条同名, 无日期限定, 工具应反馈候选而非擅自删
         const ids = taskIdsByTitle("买咖啡");
@@ -303,6 +303,32 @@ function buildCases(): Case[] {
         return { ok: Number(rows[0]?.c ?? 0) === 0, detail: "DB 中不存在「月球」任务" };
       },
     },
+    {
+      name: "批量删范围: 只删指定日期段的 (其它保留)",
+      message: "把 8月20号 到 8月25号 之间的吃药任务删掉",
+      verify: () => {
+        const left = query(
+          "SELECT COUNT(*) as c FROM tasks WHERE title LIKE '%吃药%' AND scheduled_date NOT BETWEEN '2026-08-20' AND '2026-08-25'",
+        ) as Array<{ c: number }>;
+        const rangeLeft = query(
+          "SELECT COUNT(*) as c FROM tasks WHERE title LIKE '%吃药%' AND scheduled_date BETWEEN '2026-08-20' AND '2026-08-25'",
+        ) as Array<{ c: number }>;
+        return {
+          ok: Number(rangeLeft[0]?.c ?? 0) === 0 && Number(left[0]?.c ?? 0) === 1,
+          detail: `范围内剩余 ${rangeLeft[0]?.c} 个, 范围外(8/18)剩余 ${left[0]?.c} 个 (期望 0/1)`,
+        };
+      },
+    },
+    {
+      name: "批量删全部: 把每天晚上吃药的都删掉 (全部消失)",
+      message: "把每天晚上吃药的提醒任务都删除掉",
+      verify: () => {
+        const left = query("SELECT COUNT(*) as c FROM tasks WHERE title LIKE '%吃药%'") as Array<{
+          c: number;
+        }>;
+        return { ok: Number(left[0]?.c ?? 0) === 0, detail: `DB 中「吃药」剩余 ${left[0]?.c} 个 (期望 0)` };
+      },
+    },
   ];
 }
 
@@ -312,16 +338,19 @@ function buildCases(): Case[] {
 
 async function main(): Promise<void> {
   await initDb();
-  // seed: 与真实 DB 中 107 消息时的状态对齐
+  // seed: 与真实 DB 中 107 消息时的状态对齐 + 批量删除场景的吃药任务
   run(
     `INSERT INTO tasks (title, status, scheduled_date, order_index) VALUES
      ('去买咖啡', 'scheduled', '2026-08-12', 1),
      ('去买杯咖啡', 'scheduled', '2026-08-31', 2),
      ('去买咖啡', 'scheduled', '2026-08-30', 3),
      ('买咖啡', 'scheduled', '2026-08-28', 4),
-     ('写周报', 'inbox', NULL, 5)`,
+     ('写周报', 'inbox', NULL, 5),
+     ('睡前吃药', 'scheduled', '2026-08-18', 6),
+     ('睡前吃药', 'scheduled', '2026-08-20', 7),
+     ('睡前吃药', 'scheduled', '2026-08-25', 8)`,
   );
-  console.log(`seed 完成: 5 个任务 (含 28号「买咖啡」#4)`);
+  console.log(`seed 完成: 8 个任务 (含 28号「买咖啡」#4, 3 个「睡前吃药」)`);
   console.log(`模型: ${conf.model} @ ${conf.baseUrl}`);
   if (!conf.apiKey) {
     console.log("❌ 未找到 apiKey, 请设置 TEST_AI_APIKEY 环境变量或检查真实 app DB");

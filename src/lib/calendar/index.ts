@@ -9,6 +9,7 @@ export {
   createTask,
   updateTask,
   deleteTask,
+  deleteTasksByQuery,
   verifyTaskGone,
   getTaskById,
 } from "@/lib/calendar/tasks";

@@ -114,17 +114,40 @@ export function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       reply: "好的，帮你改期。",
     };
   }
-  const delMatch = clean.match(/(?:删除|删掉|移除|去掉)[:：]?\s*(.+)/);
-  if (delMatch && delMatch[1]) {
+  // 删除类指令: 先处理「把...删掉/删除掉」的整句结构 (避免把句尾的"掉"当任务名),
+  // 再处理简单的「删除 X」. 批量请求 (每天/每晚/所有) 交给工具层, 这里不假装执行.
+  const batchDel = /(?:全部|所有|每天|每晚|每天晚上|每个|都)\s*(?:删除|删掉|移除|去掉)/.test(clean);
+  const delMatch =
+    clean.match(/(?:把|将)?(.+?)\s*(?:删除掉|删掉|删除|移除|去掉)\s*[。！？!?]?$/i) ||
+    clean.match(/(?:删除|删掉|移除|去掉)[:：]?\s*(.+)/);
+  if (delMatch && !batchDel) {
+    let title = (delMatch[1] ?? "").trim();
+    // 去掉句首语气词/承接词与句尾残留的"掉/了"
+    title = title.replace(/^(把|将|帮(?:我|你)?|麻烦(?:你)?|请(?:你)?)\s*/, "").replace(/[掉了]\s*$/, "").trim();
+    if (title) {
+      return {
+        action: "delete",
+        taskTitle: title,
+        target: "",
+        needsSearch: "no",
+        searchQuery: "",
+        scheduledDate: "",
+        timeStart: "",
+        reply: "好的，帮你删除。",
+      };
+    }
+  }
+  if (batchDel) {
+    // 批量删除不是单意图能处理的: 交给 agent 工具 (delete_tasks_by_query)
     return {
-      action: "delete",
-      taskTitle: delMatch[1].trim(),
+      action: "general",
+      taskTitle: "",
       target: "",
       needsSearch: "no",
       searchQuery: "",
       scheduledDate: "",
       timeStart: "",
-      reply: "好的，帮你删除。",
+      reply: "批量删除需要调用 AI 智能体（当前模型暂不可用），请稍后重试或直接告诉我具体要删哪个。",
     };
   }
   return {
