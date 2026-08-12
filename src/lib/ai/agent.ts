@@ -33,6 +33,8 @@ export interface AgentLoopParams {
   tools: AgentTool[];
   maxTurns?: number;
   maxOutputTokens?: number;
+  /** 停止按钮: 传入后 abort 立即中止本轮生成 */
+  signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 }
 
@@ -78,6 +80,7 @@ async function chatOnce(
   temperature: number,
   maxTokens: number,
   fetchImpl: typeof fetch,
+  signal?: AbortSignal,
 ): Promise<ChatOnceResult> {
   const res = await fetchImpl(endpoint(settings), {
     method: "POST",
@@ -93,6 +96,7 @@ async function chatOnce(
       max_tokens: maxTokens,
       stream: false,
     }),
+    signal,
   });
   if (!res.ok) {
     const body = await res.text();
@@ -123,6 +127,7 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
     tools,
     maxTurns = 6,
     maxOutputTokens = 4096,
+    signal,
     fetchImpl = defaultFetch,
   } = params;
 
@@ -141,7 +146,7 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
 
   for (let i = 0; i < maxTurns; i++) {
     turns++;
-    const { message } = await chatOnce(settings, messages, toolSpecs, 0.4, maxOutputTokens, fetchImpl);
+    const { message } = await chatOnce(settings, messages, toolSpecs, 0.4, maxOutputTokens, fetchImpl, signal);
     const calls = (message.tool_calls ?? []).filter(
       (c) => c.type === "function" && c.function && c.function.name,
     );

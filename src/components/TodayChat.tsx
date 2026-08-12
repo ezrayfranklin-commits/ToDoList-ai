@@ -6,7 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
-import { Loader2, MessageSquareText, Send, Sparkles, Wand2 } from "lucide-react";
+import { Loader2, MessageSquareText, Send, Sparkles, Square, Wand2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -47,6 +47,7 @@ import { generatePlainText } from "@/lib/ai/ollama";
 import { formatDbTime, todayStr, tomorrowStr } from "@/lib/dates";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
+import { useChatRun } from "@/store/chat";
 import { cn } from "@/lib/utils";
 
 /**
@@ -101,10 +102,11 @@ export function TodayChat() {
   const renameConversation = useRenameConversation();
 
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const busyRef = useRef(false);
-  busyRef.current = busy;
+  // 生成状态提升到全局 store（v0.10）: 切换页面/切软件后生成继续,
+  // 回到对话页时「思考中」与停止按钮仍然可见
+  const chatRun = useChatRun();
+  const busy = chatRun.running;
 
   const planStatus: ChatContext["planStatus"] = !plan
     ? "none"
@@ -115,7 +117,7 @@ export function TodayChat() {
 
   // 无当前会话时自动新建（ChatGPT 打开即有一个新对话）
   useEffect(() => {
-    if (currentConversationId == null && !busyRef.current) {
+    if (currentConversationId == null && !chatRun.running) {
       createConversation.mutateAsync().then((id) => setCurrentConversation(id));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,10 +278,9 @@ export function TodayChat() {
 
   const send = async (textOverride?: string) => {
     const text = (textOverride ?? input).trim();
-    if (!text || busyRef.current) return;
-    busyRef.current = true;
+    if (!text || chatRun.running) return;
     setInput("");
-    setBusy(true);
+    const ctrl = chatRun.startRun();
     const ctx: ChatContext = {
       date: today,
       planStatus,
@@ -400,27 +401,44 @@ export function TodayChat() {
             },
           }),
           maxTurns: 6,
+          signal: ctrl.signal,
         });
         reply = result.reply;
       }
       await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
     } catch (e) {
-      // 模型不可用/超时 → 关键词 fallback，保证必有回复
-      console.warn("[chat] agent loop failed, falling back:", e);
-      const convId = currentConversationId;
-      if (convId != null) {
-        try {
-          const intent = fallbackIntent(text, ctx);
-          const reply = await execute(intent, text);
-          await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
-        } catch (e2) {
-          toast.error(e2 instanceof Error ? e2.message : "发送失败");
+      if (ctrl.signal.aborted) {
+        // 用户点击「停止」: 结束本轮, 记录提示, 不做 fallback
+        const convId = currentConversationId;
+        if (convId != null) {
+          await addMessage.mutateAsync({
+            conversationId: convId,
+            role: "ai",
+            content: "⏹ 已停止生成，可以继续提问。",
+          });
+        }
+      } else {
+        // 模型不可用/超时 → 关键词 fallback，保证必有回复
+        console.warn("[chat] agent loop failed, falling back:", e);
+        const convId = currentConversationId;
+        if (convId != null) {
+          try {
+            const intent = fallbackIntent(text, ctx);
+            const reply = await execute(intent, text);
+            await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
+          } catch (e2) {
+            toast.error(e2 instanceof Error ? e2.message : "发送失败");
+          }
         }
       }
     } finally {
-      busyRef.current = false;
-      setBusy(false);
+      if (chatRun.isCurrent(ctrl)) chatRun.finishRun(ctrl);
     }
+  };
+
+  /** 停止当前生成（v0.10 停止按钮） */
+  const stop = () => {
+    chatRun.stopRun();
   };
 
   const chips = [
@@ -537,15 +555,28 @@ export function TodayChat() {
             placeholder="对 AI 说：加任务：买咖啡 / 把报告顺延到明天…"
             className="h-9 bg-card text-[13px]"
           />
-          <Button
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            onClick={() => send()}
-            disabled={busy || !input.trim()}
-            aria-label="发送"
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+          {busy ? (
+            // v0.10: 生成中 → 红色「停止」按钮, 点击中止本轮对话
+            <Button
+              size="icon"
+              className="h-9 w-9 shrink-0 bg-destructive text-white hover:bg-destructive/90"
+              onClick={stop}
+              aria-label="停止生成"
+              title="停止生成"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              onClick={() => send()}
+              disabled={!input.trim()}
+              aria-label="发送"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
