@@ -136,9 +136,6 @@ export function TodayPage() {
     return () => clearInterval(t);
   }, []);
 
-  const nowHHmm = () =>
-    `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const blocks = useMemo(() => plan?.data?.timeBlocks ?? [], [plan]);
@@ -155,10 +152,20 @@ export function TodayPage() {
 
   const backlogCount = openTasks?.length ?? 0;
 
-  // 超时判定: 未完成 且 当前时间已超过块结束时间（HH:mm 定长可直接字符串比较）
+  // 超时判定: 未完成 且 当前时间已超过块结束时间.
+  // 跨零点块 (start > end, 如 23:00-00:00) 的结束时间按次日算,
+  // 否则今晚 23:00 的块会被 "16:22 > 00:00" 误判为超时
   const isOverdue = (b: TimeBlock): boolean => {
     if (b.done || !b.end) return false;
-    return nowHHmm() > b.end;
+    const [eh, em] = b.end.split(":").map(Number);
+    if (Number.isNaN(eh) || Number.isNaN(em)) return false;
+    const endD = new Date(now);
+    endD.setHours(eh, em, 0, 0);
+    const [sh, sm] = (b.start ?? "").split(":").map(Number);
+    if (!Number.isNaN(sh) && !Number.isNaN(sm) && sh * 60 + sm >= eh * 60 + em) {
+      endD.setDate(endD.getDate() + 1); // end 在次日
+    }
+    return now.getTime() > endD.getTime();
   };
 
   const toggleBlock = async (block: TimeBlock, done: boolean) => {
