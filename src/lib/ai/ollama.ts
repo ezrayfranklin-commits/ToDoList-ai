@@ -54,6 +54,7 @@ function toolSpec(schema: z.ZodType): unknown {
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
+  reasoning_content?: string; // 思考模式模型: assistant 带 tool_calls 时必须携带, 否则网关 400
   tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
   tool_call_id?: string;
 }
@@ -96,33 +97,43 @@ async function chat(
   maxTokens = 4096,
   fetchImpl: typeof fetch = defaultFetch,
 ): Promise<{ message: ChatMessage }> {
-  const res = await fetchImpl(endpoint(settings), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      // Ollama ignores auth; third-party gateways require the API key.
-      ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages,
-      tools,
-      tool_choice: toolChoice,
-      temperature,
-      max_tokens: maxTokens,
-      stream: false,
-    }),
-  });
-  if (!res.ok) {
+  const payload: Record<string, unknown> = {
+    model: settings.model,
+    messages,
+    tools,
+    temperature,
+    max_tokens: maxTokens,
+    stream: false,
+  };
+  // "auto" 是 API 默认值, 不显式下发; 思考模式模型 (如 deepseek-v4-flash)
+  // 会拒绝显式 tool_choice (Thinking mode does not support this tool_choice)
+  if (toolChoice !== "auto") payload.tool_choice = toolChoice;
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetchImpl(endpoint(settings), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        // Ollama ignores auth; third-party gateways require the API key.
+        ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        choices?: Array<{ message?: ChatMessage }>;
+      };
+      const message = data.choices?.[0]?.message;
+      if (!message) throw new Error("Ollama 返回为空");
+      return { message };
+    }
     const body = await res.text();
+    // 网关拒绝 tool_choice (思考模式等): 去掉该字段重试一次, 其余错误正常抛出
+    if (attempt === 0 && "tool_choice" in payload && /tool_choice|thinking mode/i.test(body)) {
+      delete payload.tool_choice;
+      continue;
+    }
     throw friendlyHttpError(res.status, body, settings.model);
   }
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: ChatMessage }>;
-  };
-  const message = data.choices?.[0]?.message;
-  if (!message) throw new Error("Ollama 返回为空");
-  return { message };
 }
 
 function extractToolArguments(msg: ChatMessage): string | null {
@@ -172,7 +183,7 @@ export async function generateStructured<T extends z.ZodType>(
         [
           systemMsg,
           { role: "user", content: prompt },
-          { role: "assistant", content: null, tool_calls: message.tool_calls },
+          { role: "assistant", content: "", reasoning_content: "", tool_calls: message.tool_calls },
           {
             role: "tool",
             tool_call_id: message.tool_calls?.[0]?.id ?? "",

@@ -285,7 +285,14 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
     }
 
     // 执行本轮所有工具调用, 结果作为 tool 消息回填
-    messages.push({ role: "assistant", content: message.content ?? null, tool_calls: message.tool_calls });
+    // reasoning_content 占位: 思考模式网关 (如 deepseek-v4-flash) 要求 assistant
+    // 的 tool_calls 消息带 reasoning_content, 否则 400; 普通模型忽略该字段
+    messages.push({
+      role: "assistant",
+      content: message.content ?? "",
+      reasoning_content: "",
+      tool_calls: message.tool_calls,
+    });
     for (const call of calls) {
       toolCalls++;
       const tool = tools.find((t) => t.name === call.function.name);
