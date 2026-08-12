@@ -39,6 +39,7 @@ import {
   addMinutesToHHmm,
   type ChatContext,
 } from "@/lib/ai/chat";
+import ReactMarkdown from "react-markdown";
 import { runAgentLoop } from "@/lib/ai/agent";
 import { buildAgentTools } from "@/lib/ai/tools";
 import { webSearch } from "@/lib/ai/search";
@@ -47,6 +48,18 @@ import { formatDbTime, todayStr, tomorrowStr } from "@/lib/dates";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
 import { cn } from "@/lib/utils";
+
+/**
+ * AI 消息渲染：react-markdown 排版（列表/粗体/表格窄屏友好）。
+ * 对话框宽度有限：段落无外边距、列表紧凑缩进、表格小字号并允许换行。
+ */
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <div className="[&_p]:m-0 [&_p+*]:mt-1.5 [&_ul]:m-0 [&_ul]:pl-4 [&_ol]:m-0 [&_ol]:pl-4 [&_li]:my-0.5 [&_strong]:font-semibold [&_em]:italic [&_code]:rounded [&_code]:bg-secondary [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-[12px] [&_a]:break-all [&_a]:text-accent [&_table]:my-1 [&_table]:w-full [&_table]:border-collapse [&_table]:text-[12px] [&_th]:border [&_th]:border-border [&_th]:bg-secondary/60 [&_th]:px-1.5 [&_th]:py-1 [&_th]:text-left [&_td]:break-words [&_td]:border [&_td]:border-border [&_td]:px-1.5 [&_td]:py-1]">
+      <ReactMarkdown>{text}</ReactMarkdown>
+    </div>
+  );
+}
 
 function greeting(planStatus: ChatContext["planStatus"], blockCount: number): string {
   switch (planStatus) {
@@ -453,7 +466,7 @@ export function TodayChat() {
               <Sparkles className="h-3 w-3" />
             </span>
             <div className="max-w-[78%] rounded-xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm">
-              {greeting(planStatus, blockCount)}
+              <MarkdownContent text={greeting(planStatus, blockCount)} />
               <div className="mt-1 text-[10px] text-muted-foreground">
                 {format(new Date(), "HH:mm")}
               </div>
@@ -468,7 +481,7 @@ export function TodayChat() {
                 <Sparkles className="h-3 w-3" />
               </span>
               <div className="max-w-[78%] rounded-xl rounded-bl-sm border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm">
-                {m.content}
+                <MarkdownContent text={m.content} />
                 <div className="mt-1 text-[10px] text-muted-foreground">
                   {formatDbTime(m.createdAt)}
                 </div>
