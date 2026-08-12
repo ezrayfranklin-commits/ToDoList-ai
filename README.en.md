@@ -1,5 +1,7 @@
 # TodoList AI
 
+[![Release](https://img.shields.io/badge/Download-latest%20release-4A6CF7)](https://github.com/ezrayfranklin-commits/ToDoList-ai/releases/latest)
+
 I build and use this app myself, and it's still growing. If you run into problems, have ideas, or want it to work the way you need, talk to me. Email me at ezra.y.franklin@gmail.com, or open an issue or start a discussion on GitHub. The thing a one-person project needs most is someone telling you what's wrong.
 
 An AI to-do app for macOS. Unlike a plain to-do list, every morning at 8 it looks at your open tasks, calendar, and inbox, and lays out today into time blocks for you to approve. At 9 in the evening it reviews the day and carries unfinished tasks over to tomorrow.

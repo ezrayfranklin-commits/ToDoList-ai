@@ -1,5 +1,7 @@
 # TodoList AI
 
+[![Release](https://img.shields.io/github/v/release/ezrayfranklin-commits/ToDoList-ai)](https://github.com/ezrayfranklin-commits/ToDoList-ai/releases/latest)
+
 > **English**: [README.en.md](README.en.md) | **中文**: 本文档
 
 这个项目是我自己一边用一边做的，还在慢慢长。你用下来碰到问题、有想法，或者想让它按你的方式工作，都可以找我聊。写邮件到 ezra.y.franklin@gmail.com 就行，GitHub 上开 issue、进 Discussion 也可以。一个人做的东西，最缺的就是有人告诉哪里不对。
@@ -38,6 +40,16 @@
 - **晚间复盘**。21:00 总结完成度，未完成自动顺延
 - **联网搜索**。AI 回答会查 DuckDuckGo，失败自动回退 Google / Bing
 - **本地优先**。SQLite 存数据，Ollama 隐私模式，不配置云端就不联网
+
+## 下载安装
+
+去 [Releases 页面](https://github.com/ezrayfranklin-commits/ToDoList-ai/releases/latest) 下载最新的 `dmg` 文件，打开后把 App 拖进应用程序。
+
+目前发布的是 ad-hoc 签名包（没有 Apple 开发者证书），macOS 首次打开会提示「无法验证开发者」。右键点 App 选打开，或者运行一条命令放行。
+
+```bash
+xattr -cr "/Applications/TodoList AI.app"
+```
 
 ## 快速开始
 
