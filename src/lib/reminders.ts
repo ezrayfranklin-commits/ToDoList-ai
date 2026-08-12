@@ -55,6 +55,7 @@ export async function checkRemindersBridge(): Promise<BridgeStatus> {
 /**
  * Reminders due on a given date (YYYY-MM-DD) as pseudo-calendar events.
  * Gracefully returns [] when unavailable.
+ * 隐私: 通过 remindctl 读取 Apple 提醒事项/日历 (仅读取, 需要系统授权).
  */
 export async function listCalendarEvents(dateStr: string): Promise<CalendarEvent[]> {
   try {

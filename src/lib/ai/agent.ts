@@ -194,6 +194,7 @@ async function chatOnce(
     }
     let res: Response;
     try {
+      // 隐私: 会话/任务上下文将发送到用户配置的模型端点 (云端模型外发, 本地 Ollama 不外发)
       res = await fetchImpl(endpoint(settings), {
         method: "POST",
         headers: {

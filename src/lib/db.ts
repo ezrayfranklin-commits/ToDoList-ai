@@ -91,6 +91,7 @@ async function seedDefaults(): Promise<void> {
 // Typed helpers
 // ---------------------------------------------------------------------------
 
+// 隐私: settings 表存于本机 SQLite, 含 ai.apiKey (明文 JSON, 仅本机, 不上传).
 export async function getSetting<T>(key: string, fallback: T): Promise<T> {
   const rows = (await getDb().select<{ value: string | null }[]>(
     "SELECT value FROM settings WHERE key = $1",

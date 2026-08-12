@@ -82,11 +82,23 @@ npm run tauri build # 打包 DMG
 | AI | Vercel AI SDK（OpenAI/Anthropic）+ 自研 Ollama 结构化生成器（工具调用 + schema 校验重试，兼容 Ollama 对复杂 schema 的解析限制） |
 | 系统 | remindctl（Apple Reminders CLI）桥接，规避 MCP server 的 alpha 风险 |
 
-## 数据与隐私
+## 隐私与数据说明（开源发布）
 
-- 数据存于 `~/Library/Application Support/com.todolistai.app/todolist.db`
-- API Key 仅存本机 SQLite；AI 请求经 tauri-plugin-http（Rust 代理，无 CORS 问题）
-- 复盘反馈与 agent 调用日志写入 `agent_runs` 表，供提示词迭代
+所有数据默认保存在本机，**无账号、无广告、无遥测/统计 SDK**。代码中涉及隐私的位置均已加 `隐私:` 注释标注。
+
+| 项 | 说明 |
+|----|------|
+| 本地数据 | SQLite 位于 `~/Library/Application Support/com.todolistai.app/todolist.db`（任务 / 计划 / 会话消息 / 设置） |
+| API Key | 仅存本机 SQLite `settings` 表（明文 JSON，仅本机、不上传；换机器需重新填写） |
+| `agent_runs` 日志 | 本机记录 AI 提示词/输出/反馈，仅用于提示词迭代，不对外发送 |
+| 云端模型 | 配置 OpenAI / Anthropic / DeepSeek 等云端提供商时，对话内容、任务与今日计划上下文会发送到对应模型服务商；**选择本地 Ollama 则完全不外发（隐私模式）** |
+| 联网搜索 | 搜索词发送到 DuckDuckGo（失败时回退 Google），见 `src/lib/ai/search.ts` |
+| 系统联动 | 通过 `remindctl` 读取 Apple 提醒事项/日历（仅读取，需系统授权） |
+| 网络白名单 | AI 请求经 tauri-plugin-http（Rust 代理，无 CORS 问题），白名单见 `src-tauri/capabilities/default.json` |
+
+> 开源提示：`design doc*.md` 是本地开发文档，**未纳入版本控制**，不会随仓库发布；
+> `.gitignore` 已忽略 `node_modules` / `dist` / 日志。仓库目前无 LICENSE，首次公开建议补充
+> （如 MIT）后再推送。
 
 ## 目录结构
 

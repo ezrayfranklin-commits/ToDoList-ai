@@ -166,6 +166,7 @@ export async function webSearch(
   maxResults = 8,
   fetchImpl: typeof fetch = defaultFetch,
 ): Promise<SearchOutcome> {
+  // 隐私: 联网搜索会把搜索词发送到 DuckDuckGo (DDG 失败时回退 Google)
   const q = query.trim();
   if (!q) return { engine: "none", results: [], error: "query must not be empty" };
   const n = Math.min(Math.max(maxResults, 1), 20);

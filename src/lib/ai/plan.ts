@@ -226,6 +226,7 @@ export async function logRun(
   feedback: string | null,
   error: string | null,
 ): Promise<void> {
+  // 隐私: agent_runs 表在本机记录提示词/输出/反馈, 仅用于提示词迭代, 不对外发送
   const db = getDb();
   await db.execute(
     `INSERT INTO agent_runs (run_type, model, status, context, result, feedback, error)
