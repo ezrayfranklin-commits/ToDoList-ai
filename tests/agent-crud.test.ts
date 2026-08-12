@@ -7,6 +7,7 @@
 // 运行: node tests/run-agent-crud.mjs (由 esbuild 打包 tests/agent-crud.test.ts)
 
 import { initDb } from "@/lib/db";
+import { deleteTasksByQuery } from "@/lib/calendar";
 import { runAgentLoop } from "@/lib/ai/agent";
 import { buildAgentTools, type ToolDeps } from "@/lib/ai/tools";
 import { query, run } from "./shim/sql";
@@ -106,6 +107,16 @@ function buildDeps(today: string): ToolDeps {
     },
     async deleteTask(id) {
       run("DELETE FROM tasks WHERE id = $1", [id]);
+    },
+    async deleteTasksByQuery(query, opts) {
+      // 与生产一致: 复用 calendar skill 的批量删除 (含计划块清理)
+      const res = await deleteTasksByQuery(query, {
+        date: opts?.date ?? null,
+        dateTo: opts?.dateTo ?? null,
+        status: opts?.status ?? null,
+        limit: opts?.limit ?? 30,
+      });
+      return res;
     },
     async insertPlanBlock(block) {
       const dataRow = query("SELECT data FROM daily_plans WHERE plan_date = $1", [today]) as Array<{
