@@ -43,6 +43,33 @@ npm run tauri build # 打包 DMG
 - Anthropic：`claude-sonnet-4-20250514` 等
 - Ollama（本地）：`qwen2.5:7b` 等
 
+## 编码规范
+
+### 提交与热更新（每次改动必做）
+
+- **每次改完保存一个 Git 版本**：一次逻辑改动对应一个 commit，不留未提交的散改动；
+  消息用 Conventional Commits 前缀（`feat:` / `fix:` / `ui:` / `style:` / `docs:` /
+  `refactor:` / `chore:`）+ 英文简洁描述
+- **改完重启应用**：前端改动在 `npm run tauri dev` 下由 Vite HMR 自动热更新；
+  改动涉及 Rust（`src-tauri/`）或 dev 进程未在跑时需重启（`Ctrl+C` 后重新
+  `npm run tauri dev`）。收尾动作统一为：提交 Git 版本 → 确认应用热更新/重启生效
+
+### 代码风格
+
+- **浅色极简主题**（参考 Things 3 / TickTick 浅色模式）：背景 `#FAFAFA`、卡片纯白
+  `#FFFFFF`、分隔线 `#E5E5E5`；单一强调色（低饱和，如 `#4A6CF7`）；标题 600/700 字重、
+  正文 400，字号三档 16/14/12；圆角统一 `rounded-lg`（卡片 `rounded-xl`）；阴影仅
+  `shadow-sm` 悬浮态；大留白（列表项 12px、页面 24px）；系统字体 SF Pro，数字用
+  `tabular-nums`；动效 200ms ease-out，仅 hover/check 反馈
+- **只拼装现有成熟模块，不手写组件代码**：UI 一律用 shadcn/ui 现成组件拼装，改色板即可；
+  有现成库（date-fns / dnd-kit / TanStack Query 等）不重复造轮子
+- **TanStack Query 统一数据入口**：数据读写走 `hooks/queries.ts` 的 hooks/mutations，不散落 fetch
+- **中文注释使用半角标点**：代码内注释（含中文注释）一律用 ASCII 半角标点
+  （`:` `,` `(` `)` `.`），不用全角中文标点（`，。：；（）「」` 等）；
+  面向模型/用户的提示词字符串除外（保持自然中文标点）
+- **中文界面无分隔线**：组件间靠留白与气泡区分，不加多余边框分隔
+- **版本节奏**：小步提交、可随时回滚；一个改动一个版本，配合热更新即时生效
+
 ## 技术栈
 
 | 层 | 选型 |
