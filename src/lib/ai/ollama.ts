@@ -58,6 +58,35 @@ interface ChatMessage {
   tool_call_id?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Friendly HTTP error translation (RegionError → actionable Chinese hint)
+// ---------------------------------------------------------------------------
+
+function friendlyHttpError(status: number, body: string, model: string): Error {
+  let type = "";
+  let msg = body;
+  try {
+    const j = JSON.parse(body) as { error?: { type?: string; message?: string } };
+    type = j?.error?.type ?? "";
+    msg = j?.error?.message ?? body;
+  } catch {
+    // body is not JSON, keep raw
+  }
+  const link = msg.match(/https:\/\/opencode\.ai\/workspace\/[^\s"]+/)?.[0];
+  if (type === "RegionError") {
+    return new Error(
+      `模型「${model}」尚未开通（RegionError）：该模型由中国区托管，需在 opencode.ai 工作区显式开通后才能使用。` +
+        `${link ? `开通链接：${link}` : ""} 开通后无需改任何配置；暂可先在设置里切换到 glm-5.2 等已开通模型。`,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new Error(
+      `模型请求失败 (${status})：API Key 无效或无权访问该模型，请检查设置里的 Key 与模型名。${msg.slice(0, 200)}`,
+    );
+  }
+  return new Error(`模型请求失败 (${status}): ${msg.slice(0, 300)}`);
+}
+
 async function chat(
   settings: AISettings,
   messages: ChatMessage[],
@@ -86,7 +115,7 @@ async function chat(
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Ollama 请求失败 (${res.status}): ${body.slice(0, 300)}`);
+    throw friendlyHttpError(res.status, body, settings.model);
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: ChatMessage }>;
@@ -252,7 +281,7 @@ export async function generatePlainText(
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`模型请求失败 (${res.status}): ${body.slice(0, 300)}`);
+    throw friendlyHttpError(res.status, body, settings.model);
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: ChatMessage }>;
