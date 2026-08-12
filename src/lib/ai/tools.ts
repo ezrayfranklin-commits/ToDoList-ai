@@ -156,12 +156,12 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "complete_task",
       description:
-        "把某个任务标记为完成。title 用用户提到的任务名；如果用户提到了日期（如「把28号的买咖啡完成」）用 date 填具体日期 YYYY-MM-DD 来精确定位（今天/明天等相对日期先换算成具体日期），date 可空。",
+        "把某个任务标记为完成。title 用用户提到的任务名；仅当用户明确说了日期（如「把28号的买咖啡完成」）才用 date 填具体日期 YYYY-MM-DD（今天/明天等相对日期先换算成具体日期）；用户没提日期时 date 必须留空，禁止自行猜测或编造日期。",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string", description: "任务标题" },
-          date: { type: "string", description: "YYYY-MM-DD（可选，用于精确定位）" },
+          date: { type: "string", description: "YYYY-MM-DD（可选；仅当用户明确提到日期时才填，否则留空）" },
         },
         required: ["title"],
       },
@@ -184,13 +184,13 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "reschedule_task",
       description:
-        "把某个任务改期/顺延。targetDate 填换算后的具体日期（YYYY-MM-DD；今天/明天/本周五等相对说法先换算成具体日期再填）。title 用用户提到的任务名；用户提到原日期时用 date 填具体日期来精确定位（可空）。",
+        "把某个任务改期/顺延。targetDate 填换算后的具体日期（YYYY-MM-DD；今天/明天/本周五等相对说法先换算成具体日期再填）。title 用用户提到的任务名；仅当用户明确提到原日期时才用 date 填具体日期来精确定位，否则 date 必须留空，禁止自行猜测或编造日期。",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string", description: "任务标题" },
           targetDate: { type: "string", description: "YYYY-MM-DD（今天/明天/本周五等换算成具体日期）" },
-          date: { type: "string", description: "YYYY-MM-DD（可选，原任务日期，用于精确定位）" },
+          date: { type: "string", description: "YYYY-MM-DD（可选；仅当用户明确提到原日期时才填，否则留空）" },
         },
         required: ["title", "targetDate"],
       },
@@ -220,12 +220,12 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "delete_task",
       description:
-        "删除某个任务。title 用用户提到的任务名；如果用户提到了日期（如「把28号的买咖啡删掉」）用 date 填具体日期 YYYY-MM-DD 来精确定位（今天/明天等相对日期先换算成具体日期），date 可空。删除后会校验确认。",
+        "删除某个任务。title 用用户提到的任务名；仅当用户明确说了日期（如「把28号的买咖啡删掉」）才用 date 填具体日期 YYYY-MM-DD（今天/明天等相对日期先换算成具体日期）；用户没提日期时 date 必须留空，禁止自行猜测或编造日期。删除后会校验确认。",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string", description: "任务标题" },
-          date: { type: "string", description: "YYYY-MM-DD（可选，用于精确定位）" },
+          date: { type: "string", description: "YYYY-MM-DD（可选；仅当用户明确提到日期时才填，否则留空）" },
         },
         required: ["title"],
       },
@@ -253,7 +253,8 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "delete_tasks_by_query",
       description:
-        "批量删除任务：按标题关键词删除所有匹配的任务（用户说「把每天晚上吃药的任务都删掉」「把所有买咖啡的删掉」这类批量/重复任务时优先用本工具，不要用 delete_task 逐条删）。" +
+        "批量删除任务：按标题关键词删除所有匹配的任务，仅当用户明确表达批量意图时使用（「把每天晚上吃药的任务都删掉」「把所有买咖啡的删掉」这类含全部/所有/每天/每晚/每个/都等批量词的请求）。" +
+        "用户说的是「那个/这个/一个/某个」单个任务时不要用本工具，应改用 delete_task。" +
         "可选 date（起始日期 YYYY-MM-DD）与 dateTo（截止日期 YYYY-MM-DD）限定范围；不限定则删除全库匹配项。" +
         "删除前会先列出命中的任务；若命中太多（超过 30 个）会返回数量要求先缩小范围，不会误删。删除后逐条校验并报告实际删除数量。",
       parameters: {
