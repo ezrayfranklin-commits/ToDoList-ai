@@ -218,6 +218,7 @@ export function useCreateTask() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.tasks });
+      qc.invalidateQueries({ queryKey: qk.plans });
     },
   });
 }
@@ -263,7 +264,10 @@ export function useUpdateTask() {
         vals,
       );
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tasks }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.tasks });
+      qc.invalidateQueries({ queryKey: qk.plans });
+    },
   });
 }
 
@@ -284,7 +288,10 @@ export function useToggleTask() {
         );
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tasks }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.tasks });
+      qc.invalidateQueries({ queryKey: qk.plans });
+    },
   });
 }
 
@@ -302,7 +309,10 @@ export function useDeleteTask() {
       const date = rows[0]?.scheduled_date;
       if (date) await removePlanBlock(date, id);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.tasks }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.tasks });
+      qc.invalidateQueries({ queryKey: qk.plans });
+    },
   });
 }
 
