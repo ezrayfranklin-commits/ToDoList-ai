@@ -1,7 +1,7 @@
 // 设置页: AI 提供商（OpenAI 兼容/Anthropic/Ollama 一键切换，Base URL 开放支持
 // DeepSeek 等第三方端点）、定时开关、提醒事项桥接状态、长期目标管理（规划 §2.4/§2.6/§4.1）。
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import {
@@ -39,10 +39,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { toast } from "sonner";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettings } from "@/store/settings";
 import { PROVIDERS, pingModel, type ProviderId } from "@/lib/ai/provider";
-import { checkRemindersBridge, requestBridgeAuthorization, type BridgeStatus } from "@/lib/reminders";
 import { nextRuns } from "@/lib/scheduler";
 import { useCreateGoal, useDeleteGoal, useGoals } from "@/hooks/queries";
 
@@ -127,38 +125,10 @@ export function SettingsPage() {
   const createGoal = useCreateGoal();
   const deleteGoal = useDeleteGoal();
 
-  const [bridge, setBridge] = useState<BridgeStatus | null>(null);
-  const [bridgeBusy, setBridgeBusy] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [newGoal, setNewGoal] = useState("");
   const [newGoalDate, setNewGoalDate] = useState("");
-
-  useEffect(() => {
-    checkRemindersBridge().then(setBridge);
-  }, []);
-
-  const authorize = async () => {
-    setBridgeBusy(true);
-    const s = await requestBridgeAuthorization();
-    setBridge(s);
-    setBridgeBusy(false);
-    if (s.authorized) {
-      toast.success("已授权，可读取 Apple 提醒事项/日历");
-    } else {
-      toast.info(s.detail);
-    }
-  };
-
-  const openRemindersSettings = async () => {
-    try {
-      await openUrl(
-        "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders",
-      );
-    } catch {
-      toast.error("无法打开系统设置，请手动打开 系统设置 → 隐私与安全性 → 提醒事项");
-    }
-  };
 
   const test = async () => {
     setTesting(true);
@@ -360,55 +330,34 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* macOS bridge */}
-        <Card>
+        {/* macOS bridge (开发中, 暂不启用) */}
+        <Card className="opacity-60 grayscale select-none">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-[14px]">
               <Cable className="h-4 w-4" /> macOS 联动
+              <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                开发中
+              </span>
             </CardTitle>
-            <CardDescription>通过 remindctl 桥接 Apple 提醒事项/日历（规划 §2.6）</CardDescription>
+            <CardDescription>桥接 Apple 提醒事项/日历（规划 §2.6）</CardDescription>
           </CardHeader>
           <CardContent>
-            {bridge === null ? (
-              <p className="text-[12px] text-muted-foreground">检测中…</p>
-            ) : (
-              <div className="flex items-center gap-2 text-[12px]">
-                {bridge.installed && bridge.authorized ? (
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-amber-500" />
-                )}
-                <span>
-                  {bridge.installed ? (
-                    <span className="font-medium">remindctl {bridge.authorized ? "已授权" : "未授权"}</span>
-                  ) : (
-                    <span className="font-medium">未安装 remindctl</span>
-                  )}
-                  <span className="ml-1 text-muted-foreground">{bridge.detail}</span>
-                </span>
-              </div>
-            )}
-            <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-              授权后，规划智能体将读取今日提醒/日历会议，自动避开会议时间排任务。
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              该功能正在开发中，暂不可用。开发完成后，规划智能体将能读取今日提醒/日历会议，
+              自动避开会议时间排任务。
             </p>
             <div className="mt-3 flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={bridgeBusy}
-                onClick={authorize}
-              >
-                {bridgeBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Cable className="mr-1 h-3 w-3" />}
+              <Button size="sm" variant="outline" disabled>
+                <Cable className="mr-1 h-3 w-3" />
                 授权/重新检测
               </Button>
-              <Button size="sm" variant="outline" onClick={openRemindersSettings}>
+              <Button size="sm" variant="outline" disabled>
                 <Target className="mr-1 h-3 w-3" />
                 打开系统设置
               </Button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              macOS 开发模式下应用未签名，无法自动弹授权窗。请点「打开系统设置」→ 在「提醒事项」中
-              勾选允许 remindctl（或 Terminal），然后点「授权/重新检测」。
+              敬请期待，后端能力已保留。
             </p>
           </CardContent>
         </Card>
