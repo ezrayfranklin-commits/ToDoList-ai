@@ -132,7 +132,9 @@ export async function runChatAgent(
   const prompt = `用户消息：${message}${historyBlock}\n\n当前状态：${JSON.stringify(statusBrief)}\n\n请判断意图并回复。`;
   try {
     let intent: ChatIntent;
-    if (settings.provider === "ollama") {
+    if (settings.provider === "ollama" || settings.provider === "openai") {
+      // Third-party OpenAI-compatible gateways (opencode.ai etc.) need the
+      // plain /chat/completions generator (see lib/ai/ollama.ts header).
       intent = await generateStructured({
         settings,
         system: CHAT_SYSTEM,

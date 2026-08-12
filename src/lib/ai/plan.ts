@@ -32,9 +32,10 @@ export async function generateDailyPlan(
   settings: AISettings,
 ): Promise<DailyPlanOutput> {
   const prompt = `今日上下文 JSON：\n${JSON.stringify(ctx, null, 2)}\n\n请生成今日计划。`;
-  if (settings.provider === "ollama") {
-    // Ollama ignores AI SDK's response_format schema; use the direct
-    // tool-call generator with validation + retry (lib/ai/ollama.ts).
+  if (settings.provider === "ollama" || settings.provider === "openai") {
+    // Ollama & third-party OpenAI-compatible endpoints (opencode.ai etc.):
+    // AI SDK's openai adapter uses the Responses API which these gateways
+    // do not implement, so use the direct tool-call generator (lib/ai/ollama.ts).
     return generateStructured({
       settings,
       system: PLANNER_SYSTEM,

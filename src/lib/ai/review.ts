@@ -4,6 +4,7 @@
 import { generateText } from "ai";
 import { getDb } from "@/lib/db";
 import { getModel } from "@/lib/ai/provider";
+import { generatePlainText } from "@/lib/ai/ollama";
 import { getPlanByDate, logRun } from "@/lib/ai/plan";
 import { tomorrowStr } from "@/lib/dates";
 import type { AISettings, DailyPlan } from "@/lib/types";
@@ -62,12 +63,24 @@ export async function runEveningReview(
   let ok = false;
   let error: string | null = null;
   try {
-    const { text } = await generateText({
-      model: getModel(settings),
-      system: REVIEW_SYSTEM,
-      prompt: `复盘输入 JSON：\n${JSON.stringify(input, null, 2)}`,
-      temperature: 0.5,
-    });
+    let text: string;
+    if (settings.provider === "anthropic") {
+      const res = await generateText({
+        model: getModel(settings),
+        system: REVIEW_SYSTEM,
+        prompt: `复盘输入 JSON：\n${JSON.stringify(input, null, 2)}`,
+        temperature: 0.5,
+      });
+      text = res.text;
+    } else {
+      // OpenAI-compatible endpoints (incl. third-party gateways)
+      text = await generatePlainText({
+        settings,
+        system: REVIEW_SYSTEM,
+        prompt: `复盘输入 JSON：\n${JSON.stringify(input, null, 2)}`,
+        temperature: 0.5,
+      });
+    }
     summary = text.trim();
     ok = true;
   } catch (e) {

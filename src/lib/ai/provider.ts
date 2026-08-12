@@ -11,6 +11,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { generateText } from "ai";
 import type { AISettings } from "@/lib/types";
+import { generatePlainText } from "@/lib/ai/ollama";
 
 /** Per-provider default base URLs (applied on provider switch). */
 export const PROVIDER_DEFAULT_BASE_URL: Record<string, string> = {
@@ -33,6 +34,10 @@ export const PROVIDERS = [
       "gpt-4.1",
       "deepseek-chat",
       "deepseek-reasoner",
+      "deepseek-v4-flash",
+      "deepseek-v4-pro",
+      "glm-5.2",
+      "kimi-k3",
     ],
   },
   {
@@ -70,9 +75,14 @@ export function getModel(s: AISettings) {
   const common = { fetch: routeFetch };
   switch (s.provider) {
     case "openai": {
+      // NOTE: the app's planning/chat/review/ping paths do NOT use this
+      // model object for openai — they route through generateStructured /
+      // generatePlainText (lib/ai/ollama.ts) because AI SDK v7's openai
+      // adapter targets the Responses API, which third-party gateways
+      // (DeepSeek, opencode.ai, etc.) do not implement. Kept for future
+      // SDK-based features with the official endpoint.
       const openai = createOpenAI({
         apiKey: s.apiKey || "sk-not-set",
-        // Any OpenAI-compatible third-party endpoint (DeepSeek, etc.)
         baseURL: s.baseUrl || PROVIDER_DEFAULT_BASE_URL.openai,
         ...common,
       });
@@ -101,11 +111,24 @@ export function getModel(s: AISettings) {
 /** Quick connectivity check for the settings page. */
 export async function pingModel(s: AISettings): Promise<{ ok: boolean; detail: string }> {
   try {
-    const { text } = await generateText({
-      model: getModel(s),
-      prompt: "Reply with the single word: pong",
-      maxOutputTokens: 10,
-    });
+    let text: string;
+    if (s.provider === "anthropic") {
+      const res = await generateText({
+        model: getModel(s),
+        prompt: "Reply with the single word: pong",
+        maxOutputTokens: 10,
+      });
+      text = res.text;
+    } else {
+      // OpenAI-compatible endpoints (official, third-party gateways, Ollama)
+      text = await generatePlainText({
+        settings: s,
+        prompt: "Reply with the single word: pong",
+        // reasoning models (glm-5.2, deepseek-v4-pro) burn tokens on
+        // thinking first, so allow room for the actual reply
+        maxOutputTokens: 256,
+      });
+    }
     return { ok: true, detail: text.trim().slice(0, 120) || "connected" };
   } catch (e) {
     return {

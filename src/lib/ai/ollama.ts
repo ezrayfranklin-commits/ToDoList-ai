@@ -1,12 +1,12 @@
-// Ollama structured generation (规划 §2.4 隐私模式).
+// OpenAI-compatible structured/plain generation (规划 §2.4).
 //
-// Why not `ai.generateObject` here: AI SDK v7's openai-compatible provider
-// sends `response_format: json_object` WITHOUT the schema, and Ollama ignores
-// the schema — the model then invents its own JSON shape (verified in tests).
-// This module speaks the OpenAI-compatible `/chat/completions` protocol
-// directly with real tool-call parameters, validated + retried against zod.
+// Serves Ollama (local, privacy mode) AND any third-party OpenAI-compatible
+// endpoint (DeepSeek, opencode.ai gateway, etc.): AI SDK v7's openai adapter
+// targets the Responses API (/responses) which third-party gateways do not
+// implement, so this module speaks the plain /chat/completions protocol with
+// real tool-call parameters, validated + retried against zod.
 //
-// Retry ladder:
+// Retry ladder (structured):
 //   1. tool_choice "auto"    (model calls the tool with schema'd arguments)
 //   2. tool_choice "required" (force a tool call)
 //   3. prompt-embedded schema + json_object, then extract/repair JSON
@@ -69,7 +69,11 @@ async function chat(
 ): Promise<{ message: ChatMessage }> {
   const res = await fetchImpl(endpoint(settings), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      // Ollama ignores auth; third-party gateways require the API key.
+      ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+    },
     body: JSON.stringify({
       model: settings.model,
       messages,
@@ -202,4 +206,58 @@ export async function generateStructured<T extends z.ZodType>(
     }
   }
   throw new Error("模型未返回可解析的结构化输出");
+}
+
+// ---------------------------------------------------------------------------
+// Plain text generation (review summary, connectivity ping)
+// ---------------------------------------------------------------------------
+
+export interface OllamaTextParams {
+  settings: AISettings;
+  system?: string;
+  prompt: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  fetchImpl?: typeof fetch;
+}
+
+/** Non-streaming /chat/completions text generation. */
+export async function generatePlainText(
+  params: OllamaTextParams,
+): Promise<string> {
+  const {
+    settings,
+    system,
+    prompt,
+    temperature = 0.5,
+    maxOutputTokens = 2048,
+    fetchImpl = defaultFetch,
+  } = params;
+  const messages: ChatMessage[] = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: prompt });
+  const res = await fetchImpl(endpoint(settings), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      messages,
+      temperature,
+      max_tokens: maxOutputTokens,
+      stream: false,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`模型请求失败 (${res.status}): ${body.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: ChatMessage }>;
+  };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) throw new Error("模型返回为空");
+  return String(content);
 }
