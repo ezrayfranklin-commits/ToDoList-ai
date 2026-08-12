@@ -46,6 +46,24 @@ export interface ToolDeps {
     done: boolean;
   }) => Promise<void>;
   runPlanning: (date: string) => Promise<PlanResult>;
+  /** 查询任务（增删改查中的「查」）：按日期/时间范围/状态过滤。 */
+  listTasks: (filter: {
+    date: string | null;
+    timeFrom: string | null;
+    timeTo: string | null;
+    status: string;
+    limit: number;
+  }) => Promise<
+    Array<{
+      id: number;
+      title: string;
+      scheduledDate: string | null;
+      timeBlockStart: string | null;
+      timeBlockEnd: string | null;
+      priority: string;
+      status: string;
+    }>
+  >;
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
@@ -201,6 +219,56 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
         if (!res.ok) return `规划失败：${res.error}`;
         const n = res.plan?.data?.timeBlocks.length ?? 0;
         return `今日计划草稿已生成（${n} 个时间块），等待用户在界面确认`;
+      },
+    },
+    {
+      name: "list_tasks",
+      description:
+        "查询/列出任务（增删改查中的「查」）。用户问「有什么任务/规划/安排」「帮我看看/列一下」时使用。" +
+        "时间段约定：上午=06:00-12:00，下午=12:00-18:00，晚上=18:00-24:00（用户说下午时 timeFrom=12:00、timeTo=18:00）。" +
+        "date 空字符串表示不限日期；status 填 未完成/已完成/全部（空=未完成）。",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "今天/明天/YYYY-MM-DD，空字符串=不限" },
+          timeFrom: { type: "string", description: "起始时刻 HH:mm（如 12:00），空字符串=不限" },
+          timeTo: { type: "string", description: "结束时刻 HH:mm（如 18:00），空字符串=不限" },
+          status: { type: "string", description: "未完成/已完成/全部，空字符串=未完成" },
+          limit: { type: "integer", description: "最多返回条数（1-100）" },
+        },
+        required: ["date", "timeFrom", "timeTo", "status", "limit"],
+      },
+      async execute(args) {
+        const date = str(args.date);
+        const timeFrom = str(args.timeFrom);
+        const timeTo = str(args.timeTo);
+        const status = str(args.status) || "未完成";
+        const limit = Math.min(Math.max(Number(args.limit) || 50, 1), 100);
+        const tasks = await deps.listTasks({
+          date: date || null,
+          timeFrom: timeFrom || null,
+          timeTo: timeTo || null,
+          status,
+          limit,
+        });
+        if (tasks.length === 0) {
+          const where = [date && `日期 ${date}`, timeFrom && `从 ${timeFrom} 起`, timeTo && `到 ${timeTo} 止`]
+            .filter(Boolean)
+            .join("、");
+          return `没有找到${where ? `（${where}）` : ""}${status === "未完成" ? "未完成" : status}任务`;
+        }
+        const lines = tasks.map((t, i) => {
+          const time =
+            t.timeBlockStart
+              ? `${t.timeBlockStart}–${t.timeBlockEnd ?? ""}`
+              : t.scheduledDate
+                ? `（${t.scheduledDate}，未排时间）`
+                : "（未排期）";
+          const prio = t.priority === "high" ? "高" : t.priority === "low" ? "低" : "中";
+          const st = t.status === "done" ? "已完成" : "未完成";
+          return `${i + 1}. ${time} ${t.title}（${prio}，${st}）`;
+        });
+        return `共 ${tasks.length} 个任务：\n${lines.join("\n")}`;
       },
     },
   ];

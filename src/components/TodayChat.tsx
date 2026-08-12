@@ -26,6 +26,7 @@ import {
   useToggleTask,
   useUpdateTask,
 } from "@/hooks/queries";
+import { getDb } from "@/lib/db";
 import { runPlanning } from "@/lib/agent";
 import { upsertTodayPlanBlock } from "@/lib/planBlocks";
 import {
@@ -344,6 +345,45 @@ export function TodayChat() {
               const r = await runPlanning(date);
               invalidateAll();
               return r;
+            },
+            listTasks: async (filter) => {
+              const db = getDb();
+              const conds: string[] = [];
+              const vals: unknown[] = [];
+              if (filter.date) {
+                conds.push(`scheduled_date = $${vals.length + 1}`);
+                vals.push(parseTarget(filter.date));
+              }
+              if (filter.timeFrom) {
+                conds.push(`time_block_start >= $${vals.length + 1}`);
+                vals.push(filter.timeFrom);
+              }
+              if (filter.timeTo) {
+                conds.push(`time_block_start < $${vals.length + 1}`);
+                vals.push(filter.timeTo);
+              }
+              if (filter.status === "已完成") {
+                conds.push("status = 'done'");
+              } else if (filter.status === "全部") {
+                conds.push("status != 'cancelled'");
+              } else {
+                conds.push("status != 'done' AND status != 'cancelled'");
+              }
+              const sql = `SELECT id, title, scheduled_date, time_block_start, time_block_end, priority, status
+                FROM tasks WHERE ${conds.join(" AND ")}
+                ORDER BY scheduled_date IS NULL, scheduled_date ASC,
+                         time_block_start IS NULL, time_block_start ASC
+                LIMIT ${Math.min(Math.max(filter.limit, 1), 100)}`;
+              const rows = (await db.select<Array<Record<string, unknown>>>(sql, vals)) as unknown as Array<Record<string, unknown>>;
+              return rows.map((r) => ({
+                id: Number(r.id),
+                title: String(r.title),
+                scheduledDate: r.scheduled_date ? String(r.scheduled_date) : null,
+                timeBlockStart: r.time_block_start ? String(r.time_block_start) : null,
+                timeBlockEnd: r.time_block_end ? String(r.time_block_end) : null,
+                priority: String(r.priority),
+                status: String(r.status),
+              }));
             },
           }),
           maxTurns: 6,
