@@ -98,6 +98,16 @@ export const chatIntentSchema = z.object({
     .describe(
       "needsSearch=yes 时填搜索关键词（简洁，适合搜索引擎）；否则填空字符串",
     ),
+  scheduledDate: z
+    .string()
+    .describe(
+      "add_task 时用户提到的日期：'今天'/'明天'/'后天'/'YYYY-MM-DD'；没提填空字符串",
+    ),
+  timeStart: z
+    .string()
+    .describe(
+      "add_task 时用户提到的时刻，必须填 24 小时制 'HH:mm'（如 下午3点 → 15:00）；没提填空字符串",
+    ),
 });
 
 export type ChatIntent = z.infer<typeof chatIntentSchema>;

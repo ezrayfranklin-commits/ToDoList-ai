@@ -21,12 +21,21 @@ import {
   useRenameConversation,
   useTasksByDate,
   useCreateTask,
+  useUpdatePlanBlocks,
   useDeleteTask,
   useToggleTask,
   useUpdateTask,
 } from "@/hooks/queries";
 import { runPlanning } from "@/lib/agent";
-import { runChatAgent, findTask, parseTarget, type ChatContext } from "@/lib/ai/chat";
+import {
+  runChatAgent,
+  findTask,
+  parseTarget,
+  parseDateHint,
+  parseTimeHint,
+  addMinutesToHHmm,
+  type ChatContext,
+} from "@/lib/ai/chat";
 import { webSearch } from "@/lib/ai/search";
 import { generatePlainText } from "@/lib/ai/ollama";
 import { formatDbTime, todayStr, tomorrowStr } from "@/lib/dates";
@@ -68,6 +77,7 @@ export function TodayChat() {
   const toggleTask = useToggleTask();
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const updateBlocks = useUpdatePlanBlocks();
   const createConversation = useCreateConversation();
   const addMessage = useAddMessage();
   const renameConversation = useRenameConversation();
@@ -130,8 +140,55 @@ export function TodayChat() {
       case "add_task": {
         const title = intent.taskTitle || raw.replace(/^加(?:个)?任务[:：]?\s*/, "").trim();
         if (!title) return "没听清要记什么任务，试试「加任务：买咖啡」。";
-        await createTask.mutateAsync({ title, status: "inbox", source: "manual" });
+        // 排期语义: 日期 + 时刻（模型填的优先，再从原文兜底解析）
+        const scheduledDate = intent.scheduledDate
+          ? parseTarget(intent.scheduledDate)
+          : parseDateHint(raw);
+        const start = parseTimeHint(intent.timeStart) ?? parseTimeHint(raw);
+        const end = start ? addMinutesToHHmm(start, 60) : null;
+        const status = scheduledDate ? "scheduled" : "inbox";
+        const res = await createTask.mutateAsync({
+          title,
+          status,
+          scheduledDate,
+          timeBlockStart: start,
+          timeBlockEnd: end,
+          source: "manual",
+        });
         invalidateAll();
+        const taskId = Number(res.lastInsertId ?? 0);
+        // 今天且给了时刻、今日已有计划（草稿/已确认）→ 插入计划时间块（按时间排序）
+        let insertedBlock = false;
+        if (scheduledDate === today && start && taskId > 0 && plan?.data) {
+          const blocks = plan.data.timeBlocks ?? [];
+          const next = [
+            ...blocks,
+            {
+              key: `task:${taskId}`,
+              title,
+              start,
+              end: end ?? addMinutesToHHmm(start, 60),
+              priority: "medium" as const,
+              effort: "1小时",
+              taskId,
+              done: false,
+            },
+          ].sort((a, b) => a.start.localeCompare(b.start));
+          await updateBlocks.mutateAsync({ plan, blocks: next });
+          insertedBlock = true;
+        }
+        const when =
+          scheduledDate === today
+            ? "今天"
+            : scheduledDate === tomorrowStr()
+              ? "明天"
+              : scheduledDate ?? "";
+        if (insertedBlock) {
+          return `已把「${title}」排进今日计划 ${start}–${end} ✅（右侧时间块已更新）`;
+        }
+        if (when) {
+          return `已把「${title}」排到 ${when}${start ? ` ${start}–${end}` : ""}（右侧「其他待办」可见）`;
+        }
         return `已把「${title}」加入 Inbox，之后的每日规划会帮你安排它。`;
       }
       case "complete": {

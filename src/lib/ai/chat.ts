@@ -32,6 +32,7 @@ const CHAT_SYSTEM = `你是 TodoList AI 的对话助手，用户通过自然语�
 判断用户意图并输出结构化结果：
 - "规划今天"/"重新规划" → plan 或 replan（已有计划则 replan）
 - "加任务：xxx"/"添加xxx"/"记一下xxx" → add_task
+  （用户提到日期/时刻时填 scheduledDate（今天/明天/YYYY-MM-DD）与 timeStart（HH:mm，如 下午3点→15:00））
 - "完成xxx"/"xxx做完了" → complete
 - "把xxx顺延到明天"/"改到后天"/"推迟xxx" → reschedule（target 填 今天/明天/后天/YYYY-MM-DD）
 - "删掉xxx"/"删除xxx" → delete
@@ -52,6 +53,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       target: "",
       needsSearch: "no",
       searchQuery: "",
+      scheduledDate: "",
+      timeStart: "",
       reply: "好的，我重新生成一份今日计划草稿。",
     };
   }
@@ -63,18 +66,26 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       target: "",
       needsSearch: "no",
       searchQuery: "",
+      scheduledDate: "",
+      timeStart: "",
       reply: "好的，我来为你生成今日计划。",
     };
   }
   const addMatch = clean.match(/(?:加|添加|新增|记一下|记下)[个条]?(?:任务|事项|待办)?[:：]?\s*(.+)/);
   if (addMatch && addMatch[1]) {
+    const title = addMatch[1].trim();
+    // 从原文提取日期与时刻（模型不可用时的兜底）
+    const dateHint = clean.match(/(今天|明天|后天|\d{4}-\d{2}-\d{2})/)?.[1] ?? "";
+    const timeHint = parseTimeHint(clean);
     return {
       action: "add_task",
-      taskTitle: addMatch[1].trim(),
+      taskTitle: title,
       target: "",
       needsSearch: "no",
       searchQuery: "",
-      reply: `好的，把「${addMatch[1].trim()}」记下来。`,
+      scheduledDate: dateHint,
+      timeStart: timeHint ?? "",
+      reply: `好的，把「${title}」记下来${dateHint ? `（${dateHint}${timeHint ? ` ${timeHint}` : ""}）` : ""}。`,
     };
   }
   const doneMatch = clean.match(/(?:完成|做完|搞定|勾掉|办完)[:：]?\s*(.+)/);
@@ -85,6 +96,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       target: "",
       needsSearch: "no",
       searchQuery: "",
+      scheduledDate: "",
+      timeStart: "",
       reply: "收到，帮你标记完成。",
     };
   }
@@ -96,6 +109,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       target: deferMatch[2],
       needsSearch: "no",
       searchQuery: "",
+      scheduledDate: "",
+      timeStart: "",
       reply: "好的，帮你改期。",
     };
   }
@@ -107,6 +122,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       target: "",
       needsSearch: "no",
       searchQuery: "",
+      scheduledDate: "",
+      timeStart: "",
       reply: "好的，帮你删除。",
     };
   }
@@ -118,6 +135,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
     ...(isSearchLike(clean)
       ? { needsSearch: "yes" as const, searchQuery: clean.slice(0, 80) }
       : { needsSearch: "no" as const, searchQuery: "" }),
+    scheduledDate: "",
+    timeStart: "",
     reply:
       "我可以帮你：规划今天、加任务（如「加任务：买咖啡」）、标记完成、顺延到明天、删除任务，或搜索资料。试试对我说「规划今天」？",
   };
@@ -233,4 +252,46 @@ export function parseTarget(target: string): string {
       return m ? m[0] : tomorrowStr();
     }
   }
+}
+
+/** 把 "15:00" / "下午3点" / "3点" 等自然语言时刻归一化为 "HH:mm"，解析不了返回 null。 */
+export function parseTimeHint(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = s.trim();
+  const iso = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (iso) {
+    const h = Number(iso[1]);
+    if (h >= 0 && h <= 23) return `${String(h).padStart(2, "0")}:${iso[2]}`;
+    return null;
+  }
+  const cn = t.match(/(凌晨|早上|上午|中午|下午|傍晚|晚上)?(\d{1,2})\s*[点时](\d{1,2})?\s*分?/);
+  if (!cn) return null;
+  let h = Number(cn[2]);
+  const m = cn[3] ? Number(cn[3]) : 0;
+  if (h < 0 || h > 24 || m > 59) return null;
+  const period = cn[1] ?? "";
+  if (period === "下午" || period === "傍晚" || period === "晚上") {
+    if (h < 12) h += 12;
+  } else if (!period && h <= 6) {
+    // 口语里的 "3点" 默认下午；"9点" 默认上午
+    h += 12;
+  }
+  if (h >= 24) h -= 12;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/** 从原文提取日期提示（今天/明天/后天/YYYY-MM-DD），解析为日期串，没有返回 null。 */
+export function parseDateHint(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const m = s.match(/(今天|明天|后天|\d{4}-\d{2}-\d{2})/);
+  return m ? parseTarget(m[1]) : null;
+}
+
+/** "HH:mm" 加 N 分钟，跨天回绕，返回 "HH:mm"。 */
+export function addMinutesToHHmm(hhmm: string, minutes: number): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const total = (h * 60 + m + minutes) % (24 * 60);
+  const nh = Math.floor(total / 60);
+  const nm = total % 60;
+  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
 }

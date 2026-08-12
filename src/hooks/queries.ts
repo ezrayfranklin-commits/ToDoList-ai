@@ -162,6 +162,8 @@ export function useCreateTask() {
       priority?: Priority;
       status?: Task["status"];
       scheduledDate?: string | null;
+      timeBlockStart?: string | null;
+      timeBlockEnd?: string | null;
       source?: Task["source"];
     }) => {
       const db = getDb();
@@ -171,14 +173,16 @@ export function useCreateTask() {
       )) as unknown as Array<{ m: number | null }>;
       const nextOrder = (maxRes[0]?.m ?? 0) + 1;
       return db.execute(
-        `INSERT INTO tasks (title, notes, priority, status, scheduled_date, order_index, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO tasks (title, notes, priority, status, scheduled_date, time_block_start, time_block_end, order_index, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           input.title,
           input.notes ?? null,
           input.priority ?? "medium",
           input.status ?? "inbox",
           input.scheduledDate ?? null,
+          input.timeBlockStart ?? null,
+          input.timeBlockEnd ?? null,
           nextOrder,
           input.source ?? "manual",
         ],
