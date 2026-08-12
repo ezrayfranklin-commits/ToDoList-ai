@@ -268,7 +268,7 @@ export function parseWeekdayTarget(s: string): string | null {
   return toDateStr(d);
 }
 
-/** Parse chat target ("今天"/"明天"/"后天"/"本周五"/YYYY-MM-DD) into a date string. */
+/** Parse chat target ("今天"/"明天"/"后天"/"本周五"/"30号"/"8月30日"/YYYY-MM-DD) into a date string. */
 export function parseTarget(target: string): string {
   switch (target.trim()) {
     case "今天":
@@ -282,9 +282,48 @@ export function parseTarget(target: string): string {
       if (m) return m[0];
       const wd = parseWeekdayTarget(target);
       if (wd) return wd;
+      const dom = parseDayOfMonthTarget(target);
+      if (dom) return dom;
       return tomorrowStr();
     }
   }
+}
+
+/**
+ * 解析“30号”“8月30日”“下月5号”等说法为具体日期 YYYY-MM-DD。
+ * “30号”未带月份 → 本月该日，已过则顺延到下月；带月份 → 今年该日，已过则顺延到明年。
+ */
+export function parseDayOfMonthTarget(target: string): string | null {
+  const t = target.trim();
+  const today = startOfDay(new Date());
+  // 下月N号 / 下个月N号
+  let m = t.match(/^下(?:个)?月(\d{1,2})[号日]$/);
+  if (m) {
+    const day = Number(m[1]);
+    const d = new Date(today.getFullYear(), today.getMonth() + 1, day);
+    if (d.getDate() !== day || d.getMonth() !== (today.getMonth() + 1) % 12) return null;
+    return toDateStr(d);
+  }
+  // M月N号 / M月N日
+  m = t.match(/^(\d{1,2})月(\d{1,2})[号日]$/);
+  if (m) {
+    const month = Number(m[1]) - 1;
+    const day = Number(m[2]);
+    let d = new Date(today.getFullYear(), month, day);
+    if (d.getDate() !== day || d.getMonth() !== month) return null;
+    if (d < today) d = new Date(today.getFullYear() + 1, month, day); // 今年已过 → 明年
+    return toDateStr(d);
+  }
+  // N号 / N日（无月份）
+  m = t.match(/^(\d{1,2})[号日]$/);
+  if (m) {
+    const day = Number(m[1]);
+    let d = new Date(today.getFullYear(), today.getMonth(), day);
+    if (d.getDate() !== day) return null;
+    if (d < today) d = new Date(today.getFullYear(), today.getMonth() + 1, day); // 本月已过 → 下月
+    return toDateStr(d);
+  }
+  return null;
 }
 
 /** 把 "15:00" / "下午3点" / "3点" 等自然语言时刻归一化为 "HH:mm"，解析不了返回 null。 */
@@ -313,10 +352,10 @@ export function parseTimeHint(s: string | null | undefined): string | null {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** 从原文提取日期提示 (今天/明天/后天/本周X/YYYY-MM-DD), 解析为日期串, 没有返回 null. */
+/** 从原文提取日期提示 (今天/明天/后天/本周X/30号/8月30日/YYYY-MM-DD), 解析为日期串, 没有返回 null. */
 export function parseDateHint(s: string | null | undefined): string | null {
   if (!s) return null;
-  const m = s.match(/(今天|明天|后天|本(?:周|星期)[日天一二三四五六]|这(?:周|星期)[日天一二三四五六]|下(?:周|星期)[日天一二三四五六]|上(?:周|星期)[日天一二三四五六]|(?:周|星期)[日天一二三四五六]|\d{4}-\d{2}-\d{2})/);
+  const m = s.match(/(今天|明天|后天|本(?:周|星期)[日天一二三四五六]|这(?:周|星期)[日天一二三四五六]|下(?:周|星期)[日天一二三四五六]|上(?:周|星期)[日天一二三四五六]|(?:周|星期)[日天一二三四五六]|下(?:个)?月\d{1,2}[号日]|\d{1,2}月\d{1,2}[号日]|\d{1,2}[号日]|\d{4}-\d{2}-\d{2})/);
   return m ? parseTarget(m[1]) : null;
 }
 
