@@ -42,7 +42,7 @@ const CHAT_SYSTEM = `你是 TodoList AI 的对话助手，用户通过自然语�
 reply 用中文，简短自然。`;
 
 /** Keyword fallback for when the model cannot be reached. */
-function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
+export function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
   const m = message.trim();
   const clean = m.replace(/[，。！？、,.!?]/g, " ");
 

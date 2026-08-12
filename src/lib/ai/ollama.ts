@@ -35,7 +35,7 @@ export interface OllamaGenerationParams<T extends z.ZodType> {
   fetchImpl?: typeof fetch;
 }
 
-function endpoint(settings: AISettings): string {
+export function endpoint(settings: AISettings): string {
   const base = (settings.baseUrl || "http://localhost:11434/v1").replace(/\/+$/, "");
   return `${base}/chat/completions`;
 }
@@ -51,7 +51,7 @@ function toolSpec(schema: z.ZodType): unknown {
   };
 }
 
-interface ChatMessage {
+export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
   tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
@@ -62,7 +62,7 @@ interface ChatMessage {
 // Friendly HTTP error translation (RegionError → actionable Chinese hint)
 // ---------------------------------------------------------------------------
 
-function friendlyHttpError(status: number, body: string, model: string): Error {
+export function friendlyHttpError(status: number, body: string, model: string): Error {
   let type = "";
   let msg = body;
   try {

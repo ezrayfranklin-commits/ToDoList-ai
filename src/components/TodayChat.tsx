@@ -29,6 +29,7 @@ import {
 import { runPlanning } from "@/lib/agent";
 import {
   runChatAgent,
+  fallbackIntent,
   findTask,
   parseTarget,
   parseDateHint,
@@ -36,6 +37,8 @@ import {
   addMinutesToHHmm,
   type ChatContext,
 } from "@/lib/ai/chat";
+import { runAgentLoop } from "@/lib/ai/agent";
+import { buildAgentTools } from "@/lib/ai/tools";
 import { webSearch } from "@/lib/ai/search";
 import { generatePlainText } from "@/lib/ai/ollama";
 import { formatDbTime, todayStr, tomorrowStr } from "@/lib/dates";
@@ -110,7 +113,18 @@ export function TodayChat() {
 
   const historyForModel = useMemo(() => {
     const list = msgs ?? [];
-    return list.slice(-8).map((m) => ({ role: m.role, content: m.content }));
+    return list
+      .slice(-8)
+      .map((m) => ({ role: m.role as "user" | "ai", content: m.content }));
+  }, [msgs]);
+
+  // agent 循环需要 assistant 角色（chat/completions 协议）
+  const agentHistory = useMemo((): Array<{ role: "user" | "assistant"; content: string }> => {
+    const list = msgs ?? [];
+    return list.slice(-8).map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    }));
   }, [msgs]);
 
   const invalidateAll = () => {
@@ -256,6 +270,13 @@ export function TodayChat() {
     busyRef.current = true;
     setInput("");
     setBusy(true);
+    const ctx: ChatContext = {
+      date: today,
+      planStatus,
+      blockCount,
+      todayTasks: todayTasks ?? [],
+      inboxTasks: inbox ?? [],
+    };
     try {
       // 确保会话存在（ChatGPT：没有会话就先新建）
       let convId = currentConversationId;
@@ -273,28 +294,81 @@ export function TodayChat() {
         await renameConversation.mutateAsync({ id: convId, title });
       }
 
-      const ctx: ChatContext = {
-        date: today,
-        planStatus,
-        blockCount,
-        todayTasks: todayTasks ?? [],
-        inboxTasks: inbox ?? [],
-      };
-      const intent = await runChatAgent(text, ctx, settings, [
-        ...historyForModel,
-        { role: "user", content: text },
-      ]);
-      const reply = await execute(intent, text);
+      // pi 式 agent 循环（GUI 套壳本地 CLI）: 模型自主多轮调用工具
+      // （web_search / add_task / complete / reschedule / delete / plan_today），
+      // 不限制工具使用；anthropic 协议不同，暂走原单意图路由。
+      let reply: string;
+      if (settings.provider === "anthropic") {
+        const intent = await runChatAgent(text, ctx, settings, [
+          ...historyForModel,
+          { role: "user", content: text },
+        ]);
+        reply = await execute(intent, text);
+      } else {
+        const result = await runAgentLoop({
+          settings,
+          history: agentHistory,
+          userMessage: text,
+          tools: buildAgentTools({
+            today,
+            plan: plan ?? null,
+            todayTasks: todayTasks ?? [],
+            inboxTasks: inbox ?? [],
+            createTask: async (input) => {
+              const r = await createTask.mutateAsync({
+                title: input.title,
+                status: input.status,
+                scheduledDate: input.scheduledDate,
+                timeBlockStart: input.timeBlockStart,
+                timeBlockEnd: input.timeBlockEnd,
+                source: input.source,
+              });
+              invalidateAll();
+              return r;
+            },
+            toggleTask: async (input) => {
+              await toggleTask.mutateAsync(input);
+              invalidateAll();
+            },
+            updateTask: async (input) => {
+              await updateTask.mutateAsync(input);
+              invalidateAll();
+            },
+            deleteTask: async (id) => {
+              await deleteTask.mutateAsync(id);
+              invalidateAll();
+            },
+            insertPlanBlock: async (block) => {
+              if (!plan?.data) return;
+              const blocks = [...plan.data.timeBlocks, block].sort((a, b) =>
+                a.start.localeCompare(b.start),
+              );
+              await updateBlocks.mutateAsync({ plan, blocks });
+              invalidateAll();
+            },
+            runPlanning: async (date) => {
+              const r = await runPlanning(date);
+              invalidateAll();
+              return r;
+            },
+          }),
+          maxTurns: 6,
+        });
+        reply = result.reply;
+      }
       await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "发送失败");
+      // 模型不可用/超时 → 关键词 fallback，保证必有回复
+      console.warn("[chat] agent loop failed, falling back:", e);
       const convId = currentConversationId;
       if (convId != null) {
-        await addMessage.mutateAsync({
-          conversationId: convId,
-          role: "ai",
-          content: `出错了：${e instanceof Error ? e.message : String(e)}`,
-        });
+        try {
+          const intent = fallbackIntent(text, ctx);
+          const reply = await execute(intent, text);
+          await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
+        } catch (e2) {
+          toast.error(e2 instanceof Error ? e2.message : "发送失败");
+        }
       }
     } finally {
       busyRef.current = false;
@@ -330,7 +404,7 @@ export function TodayChat() {
           AI 助手
         </span>
         <span className="hidden text-[11px] text-muted-foreground sm:inline">
-          对话式操作：规划 / 加任务 / 顺延 / 完成
+          本地 CLI 智能体：规划 / 任务 / 搜索 / 自主工具调用
         </span>
       </div>
 
