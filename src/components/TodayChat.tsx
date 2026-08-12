@@ -472,9 +472,6 @@ export function TodayChat() {
           </span>
           AI 助手
         </span>
-        <span className="hidden text-[11px] text-muted-foreground sm:inline">
-          本地 CLI 智能体：规划 / 任务 / 搜索 / 自主工具调用
-        </span>
       </div>
 
       {/* Message list — fills the panel, scrolls internally */}
