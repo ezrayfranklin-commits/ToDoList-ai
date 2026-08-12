@@ -48,6 +48,7 @@ import { displayDate, todayStr } from "@/lib/dates";
 import { useUI } from "@/store/ui";
 import { PriorityBadge, TaskRow } from "@/components/TaskRow";
 import { TodayChat } from "@/components/TodayChat";
+import { PlanCalendar } from "@/components/PlanCalendar";
 import type { DailyPlan, TimeBlock } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -140,6 +141,7 @@ export function TodayPage() {
   const { openTaskDialog, setView } = useUI();
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   // 当前时间（30s 刷新一次，用于超时判定）
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -224,7 +226,7 @@ export function TodayPage() {
 
       {/* 右侧: 今日规划竖边栏（与左侧、中间融为一体，无边框分隔） */}
       <aside className="flex w-[330px] shrink-0 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {/* Header: 日期 + 一键规划 */}
+        {/* Header: 日期 + 日历（弹窗查看/增删改查规划） */}
         <div>
           <h1 className="text-[15px] font-bold tracking-tight">今日规划</h1>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
@@ -234,10 +236,16 @@ export function TodayPage() {
           </p>
         </div>
 
-        <Button onClick={planNow} disabled={planning} className="w-full gap-1.5">
-          {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {planning ? "规划中…" : "一键规划"}
+        <Button
+          variant="outline"
+          onClick={() => setCalendarOpen(true)}
+          className="w-full gap-1.5"
+        >
+          <CalendarDays className="h-4 w-4" />
+          日历
         </Button>
+
+        <PlanCalendar open={calendarOpen} onOpenChange={setCalendarOpen} />
 
         {/* 计划状态（确认环节, 规划 §4.1） */}
         {plan?.status === "draft" && (

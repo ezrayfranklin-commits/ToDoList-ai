@@ -163,6 +163,19 @@
   font-weight: 600;
 }
 
+/* ------------------------------------------------------------------ */
+/* 日历小点标记（v0.12）: 有规划/任务的日期在格子下方显示小圆点         */
+/* ------------------------------------------------------------------ */
+.has-plan-dot::after {
+  content: "";
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: #4a6cf7;
+  margin: 1px auto 0;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

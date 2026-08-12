@@ -124,6 +124,34 @@ export async function mergeAiBlocksWithTasks(
   return merged;
 }
 
+/** 标记某计划块的完成状态（勾选/取消，plan data 直写）。 */
+export async function setPlanBlockDone(
+  dateStr: string,
+  taskId: number,
+  done: boolean,
+): Promise<void> {
+  const plan = await readTodayPlan(dateStr);
+  if (!plan) return;
+  const next = plan.data.timeBlocks.map((b) =>
+    b.taskId === taskId ? { ...b, done } : b,
+  );
+  await getDb().execute(
+    `UPDATE daily_plans SET data = $1, updated_at = datetime('now') WHERE id = $2`,
+    [JSON.stringify({ ...plan.data, timeBlocks: next }), plan.id],
+  );
+}
+
+/** 从某日计划移除一个时间块（删除任务时同步清理）。 */
+export async function removePlanBlock(dateStr: string, taskId: number): Promise<void> {
+  const plan = await readTodayPlan(dateStr);
+  if (!plan) return;
+  const next = plan.data.timeBlocks.filter((b) => b.taskId !== taskId);
+  await getDb().execute(
+    `UPDATE daily_plans SET data = $1, updated_at = datetime('now') WHERE id = $2`,
+    [JSON.stringify({ ...plan.data, timeBlocks: next }), plan.id],
+  );
+}
+
 /** 一次性把某天所有「带时间的今日任务」合并进当日计划（存量数据迁移用）。 */
 export async function rebuildPlanFromTasks(
   dateStr = todayStr(),
