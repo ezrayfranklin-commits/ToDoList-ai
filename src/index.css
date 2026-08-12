@@ -106,6 +106,54 @@
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* 超时未完成时间块: 七彩光环闪烁提醒（v0.9 特效）                       */
+/* ------------------------------------------------------------------ */
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 外层: 圆角容器, 溢出裁剪, 光环厚度 2px */
+.overdue-ring {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
+}
+
+/* 渐变旋转层: 超出容器 50% 的正方形, 旋转时四角不外露 */
+.overdue-ring::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    #ff0044,
+    #ff8800,
+    #ffee00,
+    #22cc44,
+    #00ccff,
+    #4455ff,
+    #cc44ff,
+    #ff0044
+  );
+  animation: ring-spin 3s linear infinite;
+}
+
+/* 内容层盖住中心, 只露出边缘 2px 光环 */
+.overdue-ring > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 时间文字超时红色提示 */
+.overdue-time {
+  color: #e5484d !important;
+  font-weight: 600;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

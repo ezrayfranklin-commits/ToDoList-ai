@@ -2,8 +2,9 @@
 //   中间: AI 对话面板全占满
 //   右侧: 今日规划竖边栏（时间块列表 + 其他待办）
 // 流程: AI 生成 → 确认 → 执行（勾选/拖拽/增删）。
+// 特效 (v0.9): 超过结束时间仍未完成的时间块 → 七彩光环闪烁提醒。
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   closestCenter,
@@ -54,10 +55,12 @@ function SortableBlock({
   block,
   onToggle,
   onClick,
+  overdue,
 }: {
   block: TimeBlock;
   onToggle: (done: boolean) => void;
   onClick: () => void;
+  overdue: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: block.key });
@@ -68,6 +71,7 @@ function SortableBlock({
       className={cn(
         "flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5 transition-shadow",
         isDragging ? "z-10 border-accent/50 shadow-md" : "border-border hover:border-zinc-300",
+        overdue && "overdue-ring border-transparent",
       )}
     >
       <button
@@ -78,9 +82,14 @@ function SortableBlock({
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <div className="w-[72px] shrink-0 text-[11px] font-medium tabular-nums text-foreground">
+      <div
+        className={cn(
+          "w-[72px] shrink-0 text-[11px] font-medium tabular-nums text-foreground",
+          overdue && "overdue-time",
+        )}
+      >
         {block.start}
-        <span className="text-muted-foreground">–{block.end}</span>
+        <span className={cn("text-muted-foreground", overdue && "!text-red-500")}>–{block.end}</span>
       </div>
       <button
         className={cn(
@@ -112,6 +121,9 @@ function SortableBlock({
         {block.effort && !block.done && (
           <div className="text-[10.5px] text-muted-foreground">{block.effort}</div>
         )}
+        {overdue && !block.done && (
+          <div className="text-[10px] font-medium text-red-500">⏰ 已超时，记得点勾完成</div>
+        )}
       </div>
       <PriorityBadge priority={block.priority} />
     </div>
@@ -128,6 +140,15 @@ export function TodayPage() {
   const { openTaskDialog, setView } = useUI();
   const [planning, setPlanning] = useState(false);
   const [applying, setApplying] = useState(false);
+  // 当前时间（30s 刷新一次，用于超时判定）
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const nowHHmm = () =>
+    `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -147,6 +168,12 @@ export function TodayPage() {
   const total = planTotalCount({ ...plan!, data: plan?.data ?? null } as DailyPlan);
   const progress = planProgress({ ...plan!, data: plan?.data ?? null } as DailyPlan);
   const backlogCount = openTasks?.length ?? 0;
+
+  // 超时判定: 未完成 且 当前时间已超过块结束时间（HH:mm 定长可直接字符串比较）
+  const isOverdue = (b: TimeBlock): boolean => {
+    if (b.done || !b.end) return false;
+    return nowHHmm() > b.end;
+  };
 
   const planNow = async () => {
     setPlanning(true);
@@ -282,6 +309,7 @@ export function TodayPage() {
                         ? openTaskDialog(b.taskId)
                         : toast.info("该时间块尚未关联任务，确认计划后自动创建")
                     }
+                    overdue={isOverdue(b)}
                   />
                 ))}
               </div>
