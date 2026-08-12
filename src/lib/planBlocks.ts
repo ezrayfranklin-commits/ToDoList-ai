@@ -146,6 +146,11 @@ export async function removePlanBlock(dateStr: string, taskId: number): Promise<
   const plan = await readTodayPlan(dateStr);
   if (!plan) return;
   const next = plan.data.timeBlocks.filter((b) => b.taskId !== taskId);
+  if (next.length === 0) {
+    // 块删空 → 删除整条计划记录，否则日历残留空计划圆点 (v0.13 修复)
+    await getDb().execute("DELETE FROM daily_plans WHERE id = $1", [plan.id]);
+    return;
+  }
   await getDb().execute(
     `UPDATE daily_plans SET data = $1, updated_at = datetime('now') WHERE id = $2`,
     [JSON.stringify({ ...plan.data, timeBlocks: next }), plan.id],

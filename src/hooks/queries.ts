@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "@/lib/db";
+import { removePlanBlock } from "@/lib/planBlocks";
 import type {
   DailyPlan,
   Goal,
@@ -10,6 +11,25 @@ import type {
   Task,
   TimeBlock,
 } from "@/lib/types";
+
+// sqlx 返回的列名是 snake_case (scheduled_date 等), 统一映射为 Task 的 camelCase 字段
+function toTask(row: Record<string, unknown>): Task {
+  return {
+    id: Number(row.id),
+    title: String(row.title),
+    notes: row.notes != null ? String(row.notes) : null,
+    priority: (row.priority as Priority) ?? "medium",
+    status: (row.status as Task["status"]) ?? "inbox",
+    scheduledDate: row.scheduled_date != null ? String(row.scheduled_date) : null,
+    timeBlockStart: row.time_block_start != null ? String(row.time_block_start) : null,
+    timeBlockEnd: row.time_block_end != null ? String(row.time_block_end) : null,
+    orderIndex: Number(row.order_index ?? 0),
+    source: (row.source as Task["source"]) ?? "manual",
+    completedAt: row.completed_at != null ? String(row.completed_at) : null,
+    createdAt: row.created_at != null ? String(row.created_at) : "",
+    updatedAt: row.updated_at != null ? String(row.updated_at) : "",
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Keys
@@ -36,47 +56,55 @@ export const qk = {
 export function useTasks() {
   return useQuery({
     queryKey: qk.tasks,
-    queryFn: async () =>
-      (await getDb().select<Task[]>(
+    queryFn: async () => {
+      const rows = (await getDb().select<Array<Record<string, unknown>>>(
         "SELECT * FROM tasks ORDER BY status, order_index, id DESC",
-      )) as unknown as Task[],
+      )) as unknown as Array<Record<string, unknown>>;
+      return rows.map(toTask);
+    },
   });
 }
 
 export function useInboxTasks() {
   return useQuery({
     queryKey: qk.inbox,
-    queryFn: async () =>
-      (await getDb().select<Task[]>(
+    queryFn: async () => {
+      const rows = (await getDb().select<Array<Record<string, unknown>>>(
         "SELECT * FROM tasks WHERE status = 'inbox' ORDER BY order_index ASC, id ASC",
-      )) as unknown as Task[],
+      )) as unknown as Array<Record<string, unknown>>;
+      return rows.map(toTask);
+    },
   });
 }
 
 export function useTasksByDate(dateStr: string) {
   return useQuery({
     queryKey: qk.tasksByDate(dateStr),
-    queryFn: async () =>
-      (await getDb().select<Task[]>(
+    queryFn: async () => {
+      const rows = (await getDb().select<Array<Record<string, unknown>>>(
         `SELECT * FROM tasks
          WHERE scheduled_date = $1 AND status != 'cancelled'
          ORDER BY
            CASE WHEN status = 'done' THEN 1 ELSE 0 END,
            order_index ASC, id ASC`,
         [dateStr],
-      )) as unknown as Task[],
+      )) as unknown as Array<Record<string, unknown>>;
+      return rows.map(toTask);
+    },
   });
 }
 
 export function useOpenTasks() {
   return useQuery({
     queryKey: qk.openTasks,
-    queryFn: async () =>
-      (await getDb().select<Task[]>(
+    queryFn: async () => {
+      const rows = (await getDb().select<Array<Record<string, unknown>>>(
         `SELECT * FROM tasks
          WHERE status != 'done' AND status != 'cancelled' AND status != 'inbox'
          ORDER BY scheduled_date IS NULL, scheduled_date ASC, order_index ASC`,
-      )) as unknown as Task[],
+      )) as unknown as Array<Record<string, unknown>>;
+      return rows.map(toTask);
+    },
   });
 }
 
@@ -264,7 +292,15 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
-      await getDb().execute("DELETE FROM tasks WHERE id = $1", [id]);
+      const db = getDb();
+      // 先取任务排期, 删除任务后同步清理对应日期的计划块 (v0.13: 避免残留空计划圆点)
+      const rows = (await db.select<Array<{ scheduled_date: string | null }>>(
+        "SELECT scheduled_date FROM tasks WHERE id = $1",
+        [id],
+      )) as unknown as Array<{ scheduled_date: string | null }>;
+      await db.execute("DELETE FROM tasks WHERE id = $1", [id]);
+      const date = rows[0]?.scheduled_date;
+      if (date) await removePlanBlock(date, id);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.tasks }),
   });
