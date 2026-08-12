@@ -1,162 +1,106 @@
-# TodoList AI — macOS 智能待办
+# TodoList AI
 
-> Tauri v2 做壳 + shadcn/ui 浅色极简 UI + SQLite/Drizzle 存数据 +
-> Vercel AI SDK / OpenAI-compatible 协议做规划智能体 + remindctl 桥接
-> Apple 提醒事项。本地优先，模型可选云端（OpenAI/Anthropic）或本地（Ollama）。
+> **English**: [README.en.md](README.en.md) | **中文**: 本文档
 
-一个 macOS 原生体验的待办应用：AI 智能体每天自动帮你规划当天要做什么。
-读取你的日历/提醒事项、未完成任务、Inbox、长期目标，自动生成**今日计划**
-（时间块 + 优先级 + 避让会议），确认后可拖拽调整，晚间自动复盘并顺延未完成任务。
+一个跑在 macOS 上的 AI 待办应用。它跟普通待办软件的区别，是每天早上 8 点它会自己看一眼你手头的任务、日历和 Inbox，把今天要做的事排成时间块，等你点头。晚上 9 点再复盘一次，没做完的自动顺延到明天。
 
-## 功能
+数据全在本机 SQLite 里。模型可以用云端，也可以全用本地 Ollama，什么都不往外发。
 
-- **Inbox 随手记** — ⌘K 快速收集，之后交给 AI 归类
-- **对话式首页** — 今日页顶部是 AI 助手对话面板：用自然语言「规划今天」「加任务：买咖啡」「把 … 顺延到明天」「完成 …」，同时下方保留逐条待办时间块（勾选/拖拽）；模型不可用时自动降级为关键词指令
-- **每日自动规划** — 08:00 定时（cron-parser），可手动「一键规划」；先出草稿、确认后写回任务（Plan-and-Execute）
-- **计划确认与调整** — dnd-kit 拖拽排序时间块、增删任务
-- **执行与跟踪** — 勾选完成、进度条、时间块展示
-- **晚间复盘** — 21:00 智能体总结完成度，未完成任务自动顺延明日
-- **系统联动** — 通过 remindctl 桥接读取 Apple 提醒事项/日历（**开发中**，设置页已置灰）
-- **本地优先** — SQLite（tauri-plugin-sql）+ Drizzle 迁移；Ollama 隐私模式
+<p align="center">
+  <img src="docs/screenshots/home.png" width="720" alt="今日页：AI 助手 + 今日规划时间块" />
+</p>
 
-## OpenAI 兼容端点（DeepSeek 等第三方）
+## 它长什么样
 
-设置页「AI 模型」的 Base URL 已开放：官方 OpenAI 填 `https://api.openai.com/v1`，
-DeepSeek 填 `https://api.deepseek.com`，其他 OpenAI 兼容服务商同理；模型名支持自定义输入
-（如 `deepseek-chat`、`deepseek-reasoner`）。切换提供商时若未自定义端点会自动替换为对应默认值。
+首页顶部是一个 AI 助手。你直接跟它说人话，它就干活。
+
+<p align="center">
+  <img src="docs/screenshots/calendar.png" width="720" alt="日历：带圆点的日期表示当天有规划或任务" />
+</p>
+
+日历上带圆点的日期，表示那天有规划或任务。点进去可以按天增删改查。
+
+<p align="center">
+  <img src="docs/screenshots/settings.png" width="720" alt="设置：AI 模型提供商与密钥配置" />
+</p>
+
+设置页可以换模型提供商，填自己的 API Key，或者指到本地 Ollama。
+
+## 能做什么
+
+- **Inbox 随手记**。按 ⌘K 记一条，之后交给 AI 归类
+- **对话式首页**。用自然语言说「加任务：买咖啡」「把 XX 顺延到明天」「完成 XX」，AI 直接改数据库；模型不可用时自动降级成关键词指令
+- **每日自动规划**。08:00 自动生成今日计划，先出草稿，确认后写回任务
+- **计划确认与调整**。拖拽排序时间块，增删任务
+- **执行与跟踪**。勾选完成，看进度条
+- **晚间复盘**。21:00 总结完成度，未完成自动顺延
+- **联网搜索**。AI 回答会查 DuckDuckGo，失败自动回退 Google / Bing
+- **本地优先**。SQLite 存数据，Ollama 隐私模式，不配置云端就不联网
 
 ## 快速开始
 
+需要 Node.js、Rust 和 macOS。
+
 ```bash
 npm install
-# 本地模型（推荐，隐私模式）：
-ollama serve        # 默认地址 http://localhost:11434
-ollama pull qwen2.5:7b
-npm run tauri dev   # 开发
-npm run tauri build # 打包 DMG
+npm run tauri dev    # 开发模式
+npm run tauri build  # 打包 DMG
 ```
 
-### 配置云端模型（可选）
+本地模型（推荐，隐私模式）
 
-在「设置」页切换提供商并填入 API Key（仅存本机 SQLite）：
-- OpenAI：`gpt-4o-mini` / `gpt-4o`
-- Anthropic：`claude-sonnet-4-20250514` 等
-- Ollama（本地）：`qwen2.5:7b` 等
+```bash
+ollama serve
+ollama pull qwen2.5:7b
+```
 
-## 编码规范
+然后在设置页把提供商切到 Ollama。
 
-### 提交与热更新（每次改动必做）
+### 用云端模型
 
-- **每次改完保存一个 Git 版本**：一次逻辑改动对应一个 commit，不留未提交的散改动；
-  消息用 Conventional Commits 前缀（`feat:` / `fix:` / `ui:` / `style:` / `docs:` /
-  `refactor:` / `chore:`）+ 英文简洁描述
-- **改完重启应用**：前端改动在 `npm run tauri dev` 下由 Vite HMR 自动热更新；
-  改动涉及 Rust（`src-tauri/`）或 dev 进程未在跑时需重启（`Ctrl+C` 后重新
-  `npm run tauri dev`）。收尾动作统一为：提交 Git 版本 → 确认应用热更新/重启生效
+设置页的 Base URL 是开放的。官方 OpenAI 填 `https://api.openai.com/v1`，DeepSeek 填 `https://api.deepseek.com`，其他 OpenAI 兼容服务商同理。模型名可以自定义输入，比如 `deepseek-chat`、`deepseek-reasoner`、`gpt-4o-mini`。API Key 只存在本机 SQLite。
 
-### 代码风格
+## 隐私说明
 
-- **浅色极简主题**（参考 Things 3 / TickTick 浅色模式）：背景 `#FAFAFA`、卡片纯白
-  `#FFFFFF`、分隔线 `#E5E5E5`；单一强调色（低饱和，如 `#4A6CF7`）；标题 600/700 字重、
-  正文 400，字号三档 16/14/12；圆角统一 `rounded-lg`（卡片 `rounded-xl`）；阴影仅
-  `shadow-sm` 悬浮态；大留白（列表项 12px、页面 24px）；系统字体 SF Pro，数字用
-  `tabular-nums`；动效 200ms ease-out，仅 hover/check 反馈
-- **只拼装现有成熟模块，不手写组件代码**：UI 一律用 shadcn/ui 现成组件拼装，改色板即可；
-  有现成库（date-fns / dnd-kit / TanStack Query 等）不重复造轮子
-- **TanStack Query 统一数据入口**：数据读写走 `hooks/queries.ts` 的 hooks/mutations，不散落 fetch
-- **中文注释使用半角标点**：代码内注释（含中文注释）一律用 ASCII 半角标点
-  （`:` `,` `(` `)` `.`），不用全角中文标点（`，。：；（）「」` 等）；
-  面向模型/用户的提示词字符串除外（保持自然中文标点）
-- **中文界面无分隔线**：组件间靠留白与气泡区分，不加多余边框分隔
-- **版本节奏**：小步提交、可随时回滚；一个改动一个版本，配合热更新即时生效
+没有账号，没有广告，也不埋任何遥测 SDK。数据默认全在本机。
+
+| 项 | 说明 |
+|----|------|
+| 本地数据 | SQLite 位于 `~/Library/Application Support/com.todolistai.app/todolist.db` |
+| API Key | 只存本机 SQLite `settings` 表，明文，不上传 |
+| `agent_runs` 日志 | 本机记录 AI 提示词和输出，只用于提示词迭代 |
+| 云端模型 | 配置了云端提供商时，对话内容会发给对应服务商；用本地 Ollama 则完全不外发 |
+| 联网搜索 | 搜索词发给 DuckDuckGo，失败回退 Google / Bing |
+| 系统联动 | 通过 `remindctl` 读取 Apple 提醒事项，仅读取，需系统授权（开发中） |
+
+代码里涉及隐私的位置都加了 `隐私:` 注释标注。
+
+## 许可与商用限制
+
+本项目采用 **PolyForm Noncommercial License 1.0.0**（见 `LICENSE`）。
+
+- ✅ 允许个人学习、研究、自用、二次开发分享，公益组织、学校、科研机构、政府等非商业机构也可以使用
+- ❌ 禁止商业变现。包括售卖本软件或衍生品、收费托管 / SaaS、把代码放进商业产品、商业培训和咨询
+
+想商用，直接联系作者拿授权。
 
 ## 技术栈
 
 | 层 | 选型 |
 |----|------|
-| 应用壳 | Tauri v2（Rust 后端仅拼装官方插件：sql / notification / shell / autostart / single-instance / http / dialog） |
+| 应用壳 | Tauri v2（Rust 后端只拼装官方插件） |
 | 前端 | React 19 + Vite 7 + TypeScript + Tailwind CSS v4 |
-| UI | shadcn/ui（radix-nova 样式）+ lucide-react + sonner + dnd-kit + react-markdown + date-fns |
-| 状态 | Zustand + TanStack Query（统一数据入口） |
-| 数据 | SQLite（tauri-plugin-sql）+ Drizzle schema/迁移（drizzle-kit generate） |
-| AI | Vercel AI SDK（OpenAI/Anthropic）+ 自研 Ollama 结构化生成器（工具调用 + schema 校验重试，兼容 Ollama 对复杂 schema 的解析限制） |
-| 系统 | remindctl（Apple Reminders CLI）桥接，规避 MCP server 的 alpha 风险 |
+| UI | shadcn/ui + lucide-react + dnd-kit + sonner |
+| 状态 | Zustand + TanStack Query |
+| 数据 | SQLite（tauri-plugin-sql）+ Drizzle |
+| AI | Vercel AI SDK（OpenAI/Anthropic）+ 自研 Ollama 结构化生成器 |
 
-## 隐私与数据说明（开源发布）
+## 测试
 
-所有数据默认保存在本机，**无账号、无广告、无遥测/统计 SDK**。代码中涉及隐私的位置均已加 `隐私:` 注释标注。
-
-| 项 | 说明 |
-|----|------|
-| 本地数据 | SQLite 位于 `~/Library/Application Support/com.todolistai.app/todolist.db`（任务 / 计划 / 会话消息 / 设置） |
-| API Key | 仅存本机 SQLite `settings` 表（明文 JSON，仅本机、不上传；换机器需重新填写） |
-| `agent_runs` 日志 | 本机记录 AI 提示词/输出/反馈，仅用于提示词迭代，不对外发送 |
-| 云端模型 | 配置 OpenAI / Anthropic / DeepSeek 等云端提供商时，对话内容、任务与今日计划上下文会发送到对应模型服务商；**选择本地 Ollama 则完全不外发（隐私模式）** |
-| 联网搜索 | 搜索词发送到 DuckDuckGo（失败时依次回退 Google / Bing），见 `src/lib/ai/search.ts` |
-| 系统联动 | 通过 `remindctl` 读取 Apple 提醒事项/日历（仅读取，需系统授权） |
-| 网络白名单 | AI 请求经 tauri-plugin-http（Rust 代理，无 CORS 问题），白名单见 `src-tauri/capabilities/default.json` |
-
-> `.gitignore` 已忽略 `node_modules` / `dist` / 日志。仓库采用 PolyForm Noncommercial
-> License 1.0.0（见 `LICENSE`）。
-
-## 许可与商用限制
-
-本项目采用 **PolyForm Noncommercial License 1.0.0**（见 `LICENSE`）：
-
-- ✅ **允许**：个人学习、研究、实验、自用、二次开发分享，以及公益组织 / 学校 / 科研机构 / 政府等非商业机构使用；修改、分发、制作衍生作品（须保留协议与署名）。
-- ❌ **禁止**：任何形式的**商业变现**——包括但不限于售卖本软件或衍生品、收费托管 / SaaS 服务、将本项目或衍生代码用于商业产品、商业培训 / 咨询等以营利为目的的活动。
-- 需要商业授权请直接联系作者。
-
-## 目录结构
-
-```
-src/
-  db/          Drizzle schema + 迁移 SQL（?raw 打包，启动时执行）
-  lib/
-    db.ts      数据库初始化/迁移/设置读写
-    agent.ts   规划/复盘编排（草稿→确认→写回）
-    ai/        provider（模型工厂）/ schemas（zod 严格 schema）/
-               ollama（本地结构化生成器）/ plan / review / context
-    scheduler.ts  cron 定时（08:00 规划 / 21:00 复盘）
-    reminders.ts  remindctl 桥接（日历事件 / 提醒事项）
-    notify.ts    桌面通知
-  hooks/queries.ts  TanStack Query 数据层
-  pages/       今日 / Inbox / 复盘 / 设置
-  store/       Zustand（UI 状态 / 设置）
-src-tauri/     Rust 壳（插件注册 + single-instance 聚焦）
-```
-
-## 测试: AI 日历增删改查 (agent-crud)
-
-端到端验证「AI 板块 → 日历 CRUD Skill」链路: 用真实模型 (app 里配置的
-provider/model/apiKey) 通过真实 `buildAgentTools` + `runAgentLoop` 执行任务的
-增删改查, 每步由测试脚本独立直查数据库核对 (不信任模型回复), 覆盖防误删
-(多候选必须反馈列表) 与防谎报 (删除后 verify, 找不到必须如实说).
+`tests/` 下有一套端到端测试，用真实模型跑 AI 的增删改查，每步独立直查数据库核对，不信任模型回复。
 
 ```bash
 node tests/run-agent-crud.mjs
 ```
 
-- 模型配置自动从 app 真实 DB 的 `ai.*` settings 读取 (只读); 也可用
-  `TEST_AI_MODEL` / `TEST_AI_APIKEY` / `TEST_AI_BASEURL` 覆盖.
-- 测试用内存 SQLite + fetch shim, 不依赖 Tauri 运行时, 不污染真实数据;
-  通过 esbuild alias 将 `@/lib/db` / `@tauri-apps/*` 替换为 `tests/shim/`.
-- 每次工具调用都会写入测试库的 `agent_runs` (run_type=`tool`), 测试结束打印
-  审计日志, 可追溯每条增删改查实际执行结果.
-- 用例: 增(带日期时间) / 查(按日期) / 改(改期) / 完成 / 删(带日期精确删) /
-  防误删(模糊同名不给日期) / 防谎报(删不存在的任务) / 批量删范围 / 批量删全部 /
-  联网搜索(真实搜索返回链接).
-
-## 里程碑状态
-
-- [x] M0 骨架：create-tauri-app + Tailwind v4 + shadcn/ui + Drizzle schema
-- [x] M1 核心待办：今日列表（勾选/拖拽）、Inbox、⌘K、SQLite 持久化、通知
-- [x] M2 AI 规划：多提供商（OpenAI/Anthropic/Ollama）、结构化 JSON 时间块、一键规划 + 08:00 定时、确认/调整回写、21:00 复盘 + 顺延
-- [x] M3 系统联动：remindctl 桥接（日历事件读取）、菜单栏常驻（single-instance）、开机自启（autostart 插件）
-- [~] M4 打磨：浅色主题 + 空状态 + 骨架屏已完成；DMG 已打包（未签名公证）；Ollama 隐私模式已验证
-
-## 已知边界
-
-- DMG 未签名/未公证（个人开发者发布前需 `codesign` + `notarytool`）
-- remindctl 需要用户在系统设置中授权「提醒事项」访问
-- 复盘/规划的自动定时依赖应用在运行；后台常驻建议开启开机自启
+覆盖增、查、改、完成、删、防误删、防谎报、批量删、联网搜索，共 10 个用例。
