@@ -5,12 +5,12 @@
 import type { AgentTool } from "@/lib/ai/agent";
 import { webSearch } from "@/lib/ai/search";
 import {
-  findTask,
   parseDateHint,
   parseTarget,
   parseTimeHint,
   addMinutesToHHmm,
 } from "@/lib/ai/chat";
+import { findOneTask, findTaskCandidates, verifyTaskGone } from "@/lib/calendar";
 import type { DailyPlan, Priority, Task } from "@/lib/types";
 import type { PlanResult } from "@/lib/agent";
 
@@ -148,16 +148,28 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     },
     {
       name: "complete_task",
-      description: "把某个任务标记为完成。title 用用户提到的任务名。",
+      description:
+        "把某个任务标记为完成。title 用用户提到的任务名；如果用户提到了日期（如「把28号的买咖啡完成」）用 date 填具体日期 YYYY-MM-DD 来精确定位（今天/明天等相对日期先换算成具体日期），date 可空。",
       parameters: {
         type: "object",
-        properties: { title: { type: "string", description: "任务标题" } },
+        properties: {
+          title: { type: "string", description: "任务标题" },
+          date: { type: "string", description: "YYYY-MM-DD（可选，用于精确定位）" },
+        },
         required: ["title"],
       },
       async execute(args) {
         const title = str(args.title);
-        const t = findTask(title, deps.todayTasks, deps.inboxTasks);
-        if (!t) return `没有找到「${title}」相关的任务`;
+        const date = str(args.date) ? parseTarget(str(args.date)) : null;
+        const t = await findOneTask(title, { date });
+        if (!t) {
+          const cands = await findTaskCandidates(title, { date });
+          if (cands.length === 0) return `没有找到「${title}」相关的任务（已搜索全部日期）`;
+          return (
+            `「${title}」匹配到多个任务，请带 date 参数重试以精确定位：\n` +
+            cands.map((c) => `- #${c.id} ${c.title}${c.scheduledDate ? `（${c.scheduledDate}）` : "（未排期）"}`).join("\n")
+          );
+        }
         await deps.toggleTask({ id: t.id, done: true });
         return `已完成「${t.title}」`;
       },
@@ -165,21 +177,30 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "reschedule_task",
       description:
-        "把某个任务改期/顺延。targetDate 填换算后的具体日期（YYYY-MM-DD；今天/明天/本周五等相对说法先换算成具体日期再填）。title 用用户提到的任务名。",
+        "把某个任务改期/顺延。targetDate 填换算后的具体日期（YYYY-MM-DD；今天/明天/本周五等相对说法先换算成具体日期再填）。title 用用户提到的任务名；用户提到原日期时用 date 填具体日期来精确定位（可空）。",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string", description: "任务标题" },
           targetDate: { type: "string", description: "YYYY-MM-DD（今天/明天/本周五等换算成具体日期）" },
+          date: { type: "string", description: "YYYY-MM-DD（可选，原任务日期，用于精确定位）" },
         },
         required: ["title", "targetDate"],
       },
       async execute(args) {
         const title = str(args.title);
         const target = str(args.targetDate) ? parseTarget(str(args.targetDate)) : null;
-        const t = findTask(title, deps.todayTasks, deps.inboxTasks);
-        if (!t) return `没有找到「${title}」相关的任务`;
+        const date = str(args.date) ? parseTarget(str(args.date)) : null;
         if (!target) return "targetDate 不能为空";
+        const t = await findOneTask(title, { date });
+        if (!t) {
+          const cands = await findTaskCandidates(title, { date });
+          if (cands.length === 0) return `没有找到「${title}」相关的任务（已搜索全部日期）`;
+          return (
+            `「${title}」匹配到多个任务，请带 date 参数重试以精确定位：\n` +
+            cands.map((c) => `- #${c.id} ${c.title}${c.scheduledDate ? `（${c.scheduledDate}）` : "（未排期）"}`).join("\n")
+          );
+        }
         await deps.updateTask({
           id: t.id,
           scheduledDate: target,
@@ -191,18 +212,35 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     },
     {
       name: "delete_task",
-      description: "删除某个任务。title 用用户提到的任务名。",
+      description:
+        "删除某个任务。title 用用户提到的任务名；如果用户提到了日期（如「把28号的买咖啡删掉」）用 date 填具体日期 YYYY-MM-DD 来精确定位（今天/明天等相对日期先换算成具体日期），date 可空。删除后会校验确认。",
       parameters: {
         type: "object",
-        properties: { title: { type: "string", description: "任务标题" } },
+        properties: {
+          title: { type: "string", description: "任务标题" },
+          date: { type: "string", description: "YYYY-MM-DD（可选，用于精确定位）" },
+        },
         required: ["title"],
       },
       async execute(args) {
         const title = str(args.title);
-        const t = findTask(title, deps.todayTasks, deps.inboxTasks);
-        if (!t) return `没有找到「${title}」相关的任务`;
+        const date = str(args.date) ? parseTarget(str(args.date)) : null;
+        const t = await findOneTask(title, { date });
+        if (!t) {
+          const cands = await findTaskCandidates(title, { date });
+          if (cands.length === 0) return `没有找到「${title}」相关的任务（已搜索全部日期）`;
+          return (
+            `「${title}」匹配到多个任务，请带 date 参数重试以精确定位：\n` +
+            cands.map((c) => `- #${c.id} ${c.title}${c.scheduledDate ? `（${c.scheduledDate}）` : "（未排期）"}`).join("\n")
+          );
+        }
+        const label = `#${t.id}「${t.title}」${t.scheduledDate ? `（${t.scheduledDate}）` : ""}`;
         await deps.deleteTask(t.id);
-        return `已删除「${t.title}」`;
+        // 防谎报: 删除后校验确认任务真的没了
+        const gone = await verifyTaskGone(t.id);
+        return gone
+          ? `已删除 ${label}，并已确认该任务不在列表中`
+          : `删除 ${label} 未生效，请重试或检查数据库`;
       },
     },
     {

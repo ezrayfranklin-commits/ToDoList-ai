@@ -12,6 +12,7 @@
 import { endpoint, friendlyHttpError, type ChatMessage } from "@/lib/ai/ollama";
 import { format } from "date-fns";
 import { weekdayCN } from "@/lib/dates";
+import { logToolCall } from "@/lib/calendar";
 import type { AISettings } from "@/lib/types";
 
 /** 一个可调用工具：元数据（扁平 JSON Schema，Ollama 兼容）+ 执行函数。 */
@@ -61,7 +62,9 @@ const DEFAULT_SYSTEM = `你是 TodoList AI 内置的本地智能体，运行在�
 - 需要最新信息（新闻/价格/外部事实）时先搜索再回答，并标注来源。
 - 每个工具返回结果后，若还需更多信息可继续调用其他工具。
 - 最终用中文给用户简洁清晰的总结；用户闲聊时直接友好回答，无需调用工具。
-- 消息里提到的任务名，如与工具参数需要精确匹配，尽量用用户原话。`;
+- 消息里提到的任务名，如与工具参数需要精确匹配，尽量用用户原话。
+- 工具返回的结果是事实，必须如实转述：工具返回「没有找到」时必须告诉用户找不到，
+  禁止虚构成功（例如工具没删掉却说已删除）。只有在你看到工具明确返回成功结果后才能确认操作完成。`;
 
 /**
  * 当前日期上下文块: 拼接进系统提示, 让模型能换算"本周五/下周一"等相对日期.
@@ -297,8 +300,10 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
       toolCalls++;
       const tool = tools.find((t) => t.name === call.function.name);
       let out: string;
+      let ok = true;
       if (!tool) {
         out = `未知工具：${call.function.name}`;
+        ok = false;
       } else {
         const args = parseArgs(call.function.arguments);
         if (args === null) {
@@ -306,14 +311,18 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
           out = `工具 ${call.function.name} 的参数不是合法 JSON（原始: ${String(
             call.function.arguments,
           ).slice(0, 120)}），请重新调用该工具并给出合法 JSON 参数。`;
+          ok = false;
         } else {
           try {
             out = await tool.execute(args);
           } catch (e) {
             out = `工具执行失败：${e instanceof Error ? e.message : String(e)}`;
+            ok = false;
           }
         }
       }
+      // 审计: 每次工具调用落库 (agent_runs, run_type='tool'), 便于排查"说做了没做"
+      await logToolCall(tool?.name ?? "unknown", call.function.arguments, out, ok ? "ok" : "error", settings.model).catch(() => {});
       messages.push({ role: "tool", tool_call_id: call.id, content: out });
     }
   }
