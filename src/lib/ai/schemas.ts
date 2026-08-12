@@ -62,3 +62,32 @@ export const PLANNER_SYSTEM = `你是一名专业的"每日规划师"（daily pl
 6. inbox 条目要么排入今日（inboxActions=schedule，timeBlocks 里 taskId=0），
    要么 defer 到明天（不要 drop，除非明显无关），并写一句原因。
 7. 输出严格遵循给定 JSON schema：字段名、类型、枚举值必须完全一致。`;
+
+// ---------------------------------------------------------------------------
+// Chat agent intent (Today page dialogue, 首页对话面板)
+// ---------------------------------------------------------------------------
+
+export const chatIntentSchema = z.object({
+  action: z
+    .enum(["plan", "replan", "add_task", "complete", "reschedule", "delete", "general"])
+    .describe(
+      "用户意图：plan=首次生成今日计划；replan=重新生成/覆盖已有计划；add_task=新增待办；complete=把某任务标记完成；reschedule=把某任务改期/顺延；delete=删除任务；general=闲聊或无需操作的其他请求",
+    ),
+  taskTitle: z
+    .string()
+    .describe(
+      "操作涉及的任务标题（add_task/complete/reschedule/delete 时必须填用户提到的任务名；plan/replan/general 填空字符串）",
+    ),
+  target: z
+    .string()
+    .describe(
+      'reschedule 的目标时间，格式："今天"、"明天"、"后天"或"YYYY-MM-DD"；其他动作填空字符串',
+    ),
+  reply: z
+    .string()
+    .describe(
+      "给用户的中文回复，一句话说明将执行的操作；general 时直接回答用户的问题",
+    ),
+});
+
+export type ChatIntent = z.infer<typeof chatIntentSchema>;

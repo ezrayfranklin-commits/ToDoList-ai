@@ -209,7 +209,7 @@ function rowToPlan(r: Record<string, unknown>): DailyPlan {
 }
 
 export async function logRun(
-  runType: "plan" | "review",
+  runType: "plan" | "review" | "chat",
   model: string | null,
   status: "ok" | "error",
   ctx: PlanContext | unknown,

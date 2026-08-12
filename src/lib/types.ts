@@ -69,7 +69,7 @@ export interface DailyPlan {
 
 export interface AgentRun {
   id: number;
-  runType: "plan" | "review";
+  runType: "plan" | "review" | "chat";
   model: string | null;
   status: "ok" | "error";
   context: string | null;

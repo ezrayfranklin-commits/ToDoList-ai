@@ -1,5 +1,5 @@
-// 设置页: AI 提供商（OpenAI/Anthropic/Ollama 一键切换）、定时开关、
-// 提醒事项桥接状态、长期目标管理（规划 §2.4/§2.6/§4.1）。
+// 设置页: AI 提供商（OpenAI 兼容/Anthropic/Ollama 一键切换，Base URL 开放支持
+// DeepSeek 等第三方端点）、定时开关、提醒事项桥接状态、长期目标管理（规划 §2.4/§2.6/§4.1）。
 
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
@@ -7,7 +7,9 @@ import { zhCN } from "date-fns/locale";
 import {
   Bot,
   Cable,
+  Check,
   CheckCircle2,
+  ChevronsUpDown,
   Clock,
   Loader2,
   Plus,
@@ -28,12 +30,95 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { toast } from "sonner";
 import { useSettings } from "@/store/settings";
-import { PROVIDERS, pingModel } from "@/lib/ai/provider";
+import { PROVIDERS, pingModel, type ProviderId } from "@/lib/ai/provider";
 import { checkRemindersBridge, type BridgeStatus } from "@/lib/reminders";
 import { nextRuns } from "@/lib/scheduler";
 import { useCreateGoal, useDeleteGoal, useGoals } from "@/hooks/queries";
+
+/**
+ * Model picker: searchable preset list + free-text custom model names
+ * (shadcn Command + Popover, assembled from existing components).
+ * Needed because third-party OpenAI-compatible endpoints use their own
+ * model names (e.g. deepseek-chat) that are not in any fixed list.
+ */
+function ModelCombobox({
+  value,
+  models,
+  onChange,
+}: {
+  value: string;
+  models: readonly string[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const filtered = models.filter((m) => m.includes(q.trim()));
+  const custom = q.trim() && !models.includes(q.trim());
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between font-normal"
+        >
+          <span className="truncate">{value || "选择或输入模型名"}</span>
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="搜索预设，或直接输入自定义模型名…"
+            value={q}
+            onValueChange={setQ}
+          />
+          <CommandList>
+            {filtered.map((m) => (
+              <CommandItem
+                key={m}
+                value={m}
+                onSelect={() => {
+                  onChange(m);
+                  setOpen(false);
+                }}
+              >
+                <Check className={m === value ? "opacity-100" : "opacity-0"} />
+                {m}
+              </CommandItem>
+            ))}
+            {custom && (
+              <CommandItem
+                value={`custom:${q}`}
+                onSelect={() => {
+                  onChange(q.trim());
+                  setOpen(false);
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                使用自定义模型：{q.trim()}
+              </CommandItem>
+            )}
+            {filtered.length === 0 && !custom && (
+              <CommandEmpty>没有匹配的模型</CommandEmpty>
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function SettingsPage() {
   const settings = useSettings();
@@ -71,6 +156,20 @@ export function SettingsPage() {
   const provider = PROVIDERS.find((p) => p.id === settings.provider) ?? PROVIDERS[2];
   const runs = nextRuns();
 
+  /**
+   * Switch provider; if the current base URL is still the previous
+   * provider's default (user never customized it), swap in the new
+   * provider's default endpoint automatically.
+   */
+  const switchProvider = (v: ProviderId) => {
+    const prev = PROVIDERS.find((p) => p.id === settings.provider);
+    const next = PROVIDERS.find((p) => p.id === v);
+    const current = settings.baseUrl.trim();
+    const isDefault = prev?.defaultBaseUrl && current === prev.defaultBaseUrl;
+    const baseUrl = isDefault || !current ? (next?.defaultBaseUrl ?? current) : current;
+    settings.update({ provider: v, baseUrl });
+  };
+
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
       <div className="mb-6">
@@ -90,46 +189,61 @@ export function SettingsPage() {
             <CardDescription>规划与复盘智能体使用的模型</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>提供商</Label>
-                <Select
-                  value={settings.provider}
-                  onValueChange={(v) =>
-                    settings.update({ provider: v as typeof settings.provider })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROVIDERS.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>模型</Label>
-                <Select
-                  value={settings.model}
-                  onValueChange={(v) => settings.update({ model: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {provider.models.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>提供商</Label>
+              <Select value={settings.provider} onValueChange={switchProvider}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">{provider.hint}</p>
             </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label>模型（可搜索或自定义输入）</Label>
+              <ModelCombobox
+                value={settings.model}
+                models={provider.models}
+                onChange={(v) => settings.update({ model: v })}
+              />
+            </div>
+
+            {settings.provider !== "anthropic" && (
+              <div className="flex flex-col gap-1.5">
+                <Label>
+                  {settings.provider === "ollama" ? "Ollama 地址" : "Base URL（OpenAI 兼容端点）"}
+                </Label>
+                <Input
+                  value={settings.baseUrl}
+                  onChange={(e) => settings.update({ baseUrl: e.target.value })}
+                  placeholder={
+                    settings.provider === "ollama"
+                      ? "http://localhost:11434/v1"
+                      : "https://api.openai.com/v1（DeepSeek: https://api.deepseek.com）"
+                  }
+                />
+                {settings.provider === "openai" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    官方 OpenAI 填 https://api.openai.com/v1；DeepSeek 填
+                    https://api.deepseek.com；其他 OpenAI 兼容服务商同理（{provider.hint}
+                    ）。模型名同步改为服务商对应的名称，如 deepseek-chat。
+                  </p>
+                )}
+                {settings.provider === "ollama" && (
+                  <p className="text-[11px] text-muted-foreground">
+                    需要先运行 <code className="rounded bg-secondary px-1">ollama serve</code>
+                    {" "}并拉取模型
+                  </p>
+                )}
+              </div>
+            )}
 
             {settings.provider !== "ollama" && (
               <div className="flex flex-col gap-1.5">
@@ -140,20 +254,6 @@ export function SettingsPage() {
                   onChange={(e) => settings.update({ apiKey: e.target.value })}
                   placeholder="sk-..."
                 />
-              </div>
-            )}
-
-            {settings.provider === "ollama" && (
-              <div className="flex flex-col gap-1.5">
-                <Label>Ollama 地址</Label>
-                <Input
-                  value={settings.baseUrl}
-                  onChange={(e) => settings.update({ baseUrl: e.target.value })}
-                  placeholder="http://localhost:11434/v1"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  需要先运行 <code className="rounded bg-secondary px-1">ollama serve</code> 并拉取模型
-                </p>
               </div>
             )}
 

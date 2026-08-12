@@ -30,6 +30,7 @@ import { runPlanning } from "@/lib/agent";
 import { todayStr, displayDate } from "@/lib/dates";
 import { useUI } from "@/store/ui";
 import { PriorityBadge } from "@/components/TaskRow";
+import { TodayChat } from "@/components/TodayChat";
 import type { DailyPlan, TimeBlock } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -186,6 +187,9 @@ export function TodayPage() {
           {planning ? "规划中…" : "一键规划"}
         </Button>
       </div>
+
+      {/* Dialogue panel (对话框 + 待办清单并存) */}
+      <TodayChat />
 
       {/* Plan status banner (确认环节, 规划 §4.1) */}
       {plan?.status === "draft" && (

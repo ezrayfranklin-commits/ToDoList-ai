@@ -11,12 +11,19 @@
 ## 功能
 
 - **Inbox 随手记** — ⌘K 快速收集，之后交给 AI 归类
+- **对话式首页** — 今日页顶部是 AI 助手对话面板：用自然语言「规划今天」「加任务：买咖啡」「把 … 顺延到明天」「完成 …」，同时下方保留逐条待办时间块（勾选/拖拽）；模型不可用时自动降级为关键词指令
 - **每日自动规划** — 08:00 定时（cron-parser），可手动「一键规划」；先出草稿、确认后写回任务（Plan-and-Execute）
 - **计划确认与调整** — dnd-kit 拖拽排序时间块、增删任务
 - **执行与跟踪** — 勾选完成、进度条、时间块展示
 - **晚间复盘** — 21:00 智能体总结完成度，未完成任务自动顺延明日
 - **系统联动** — 通过 remindctl 桥接读取 Apple 提醒事项/日历（M3，需授权）
 - **本地优先** — SQLite（tauri-plugin-sql）+ Drizzle 迁移；Ollama 隐私模式
+
+## OpenAI 兼容端点（DeepSeek 等第三方）
+
+设置页「AI 模型」的 Base URL 已开放：官方 OpenAI 填 `https://api.openai.com/v1`，
+DeepSeek 填 `https://api.deepseek.com`，其他 OpenAI 兼容服务商同理；模型名支持自定义输入
+（如 `deepseek-chat`、`deepseek-reasoner`）。切换提供商时若未自定义端点会自动替换为对应默认值。
 
 ## 快速开始
 
