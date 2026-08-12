@@ -1,6 +1,7 @@
 // Today page dialogue panel (首页中央 AI 对话面板, 全屏占满).
+// 与左右栏融为一体：无卡片边框、无分隔线，仅靠留白与气泡区分。
 // AI 气泡在左、用户气泡在右；指令执行后自动刷新右侧待办列表。
-// 组件全部由 shadcn/ui 现成组件拼装（Card/Input/Button + lucide 图标）。
+// 组件全部由 shadcn/ui 现成组件拼装（Input/Button + lucide 图标）。
 
 import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
@@ -11,7 +12,6 @@ import {
   Sparkles,
   Wand2,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -182,9 +182,9 @@ export function TodayChat() {
   ];
 
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* Panel header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+    <div className="flex h-full min-h-0 flex-col">
+      {/* Panel header — 无边框，仅文字 */}
+      <div className="flex items-center justify-between px-4 pb-2 pt-1">
         <span className="flex items-center gap-2 text-[13px] font-semibold">
           <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-accent/10 text-accent">
             <MessageSquareText className="h-3.5 w-3.5" />
@@ -199,7 +199,7 @@ export function TodayChat() {
       {/* Message list — fills the panel, scrolls internally */}
       <div
         ref={scrollRef}
-        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto bg-background/60 px-4 py-4"
+        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-4 py-3"
       >
         {msgs.map((m) =>
           m.role === "ai" ? (
@@ -236,8 +236,8 @@ export function TodayChat() {
         )}
       </div>
 
-      {/* Input area — pinned to the bottom */}
-      <div className="border-t border-border px-3 py-2.5">
+      {/* Input area — pinned to the bottom, 无顶部边框 */}
+      <div className="px-3 pb-1 pt-2">
         <div className="mb-2 flex flex-wrap gap-1.5">
           {chips.map((c) => (
             <button
@@ -270,6 +270,6 @@ export function TodayChat() {
           </Button>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

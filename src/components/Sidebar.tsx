@@ -28,7 +28,7 @@ export function Sidebar() {
   const taskTotal = todayTasks?.length ?? 0;
 
   return (
-    <aside className="flex h-full w-56 flex-col border-r border-border bg-sidebar px-3 py-5">
+    <aside className="flex h-full w-56 flex-col px-3 py-5">
       <div className="mb-6 flex items-center gap-2 px-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Sparkles className="h-4 w-4" />

@@ -195,8 +195,8 @@ export function TodayPage() {
         <TodayChat />
       </div>
 
-      {/* 右侧: 今日规划竖边栏 */}
-      <aside className="flex w-[330px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-border bg-background px-4 py-4">
+      {/* 右侧: 今日规划竖边栏（与左侧、中间融为一体，无边框分隔） */}
+      <aside className="flex w-[330px] shrink-0 flex-col gap-3 overflow-y-auto px-4 py-4">
         {/* Header: 日期 + 一键规划 */}
         <div>
           <h1 className="text-[15px] font-bold tracking-tight">今日规划</h1>
