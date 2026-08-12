@@ -4,6 +4,7 @@
 
 import { generateObject } from "ai";
 import { getDb } from "@/lib/db";
+import { mergeAiBlocksWithTasks } from "@/lib/planBlocks";
 import { getModel } from "@/lib/ai/provider";
 import { generateStructured } from "@/lib/ai/ollama";
 import {
@@ -70,22 +71,29 @@ export async function savePlanDraft(
   ctx: PlanContext,
 ): Promise<DailyPlan> {
   const db = getDb();
+  const existing = await getPlanByDate(dateStr);
+  // 合并：AI 新块 + 今日已有带时间任务块 + 旧计划已完成块（v0.8.4 修复覆盖丢失）
+  const aiBlocks: TimeBlock[] = output.timeBlocks.map((tb, i) => ({
+    key: keyFor(tb.taskId, tb.title, i),
+    title: tb.title,
+    start: tb.start,
+    end: tb.end,
+    priority: tb.priority,
+    effort: tb.effort,
+    taskId: tb.taskId > 0 ? tb.taskId : null,
+    done: false,
+  }));
+  const mergedBlocks = await mergeAiBlocksWithTasks(
+    aiBlocks,
+    dateStr,
+    existing?.data?.timeBlocks ?? [],
+  );
   const data: DailyPlanData = {
     date: dateStr,
-    timeBlocks: output.timeBlocks.map((tb, i) => ({
-      key: keyFor(tb.taskId, tb.title, i),
-      title: tb.title,
-      start: tb.start,
-      end: tb.end,
-      priority: tb.priority,
-      effort: tb.effort,
-      taskId: tb.taskId > 0 ? tb.taskId : null,
-      done: false,
-    })),
+    timeBlocks: mergedBlocks,
     notes: output.notes ?? "",
     inboxActions: output.inboxActions,
   };
-  const existing = await getPlanByDate(dateStr);
   if (existing) {
     await db.execute(
       `UPDATE daily_plans SET data = $1, status = 'draft', source = 'agent', updated_at = datetime('now') WHERE id = $2`,

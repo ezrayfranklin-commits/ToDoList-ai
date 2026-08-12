@@ -45,7 +45,7 @@ import { applyPlanToDb, planDoneCount, planProgress, planTotalCount } from "@/li
 import { runPlanning } from "@/lib/agent";
 import { displayDate, todayStr } from "@/lib/dates";
 import { useUI } from "@/store/ui";
-import { PriorityBadge } from "@/components/TaskRow";
+import { PriorityBadge, TaskRow } from "@/components/TaskRow";
 import { TodayChat } from "@/components/TodayChat";
 import type { DailyPlan, TimeBlock } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -321,14 +321,12 @@ export function TodayPage() {
             </div>
             <div className="flex flex-col gap-2">
               {orphanTasks.map((t) => (
-                <div
+                <TaskRow
                   key={t.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:border-zinc-300"
+                  task={t}
+                  onToggle={(done) => toggleTask.mutate({ id: t.id, done })}
                   onClick={() => openTaskDialog(t.id)}
-                >
-                  <div className="min-w-0 flex-1 truncate text-[12.5px]">{t.title}</div>
-                  <PriorityBadge priority={t.priority} />
-                </div>
+                />
               ))}
             </div>
           </div>

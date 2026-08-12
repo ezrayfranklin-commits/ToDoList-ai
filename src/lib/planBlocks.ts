@@ -73,6 +73,57 @@ export async function upsertTodayPlanBlock(
   return next;
 }
 
+/**
+ * 合并 AI 生成的计划块与今日已有带时间任务（v0.8.4 修复）。
+ * 「一键规划」不得覆盖/丢失用户已有的带时间任务块：
+ * AI 块优先（含其排期调整），任务表中带时间的未完成任务全部并入，
+ * 旧计划中已完成的块保留（不丢完成记录），最后按时间排序。
+ */
+export async function mergeAiBlocksWithTasks(
+  aiBlocks: TimeBlock[],
+  dateStr: string,
+  preserveDone?: TimeBlock[],
+): Promise<TimeBlock[]> {
+  const db = getDb();
+  const rows = (await db.select<Array<Record<string, unknown>>>(
+    `SELECT id, title, priority, time_block_start, time_block_end FROM tasks
+     WHERE status = 'scheduled' AND scheduled_date = $1
+       AND time_block_start IS NOT NULL AND time_block_end IS NOT NULL`,
+    [dateStr],
+  )) as unknown as Array<Record<string, unknown>>;
+
+  const merged: TimeBlock[] = [...aiBlocks];
+  const seen = new Set<number>();
+  for (const b of merged) {
+    if (b.taskId != null) seen.add(b.taskId);
+  }
+  // 旧计划里已完成的块（AI 重新生成时保留完成记录）
+  for (const b of preserveDone ?? []) {
+    if (!b.done) continue;
+    if (b.taskId != null && seen.has(b.taskId)) continue;
+    merged.push(b);
+    if (b.taskId != null) seen.add(b.taskId);
+  }
+  // 任务表中今天带时间的任务
+  for (const r of rows) {
+    const taskId = Number(r.id);
+    if (seen.has(taskId)) continue;
+    merged.push({
+      key: `task:${taskId}`,
+      title: String(r.title),
+      start: String(r.time_block_start),
+      end: String(r.time_block_end),
+      priority: (r.priority as TimeBlock["priority"]) ?? "medium",
+      effort: "",
+      taskId,
+      done: false,
+    });
+    seen.add(taskId);
+  }
+  merged.sort((a, b) => a.start.localeCompare(b.start));
+  return merged;
+}
+
 /** 一次性把某天所有「带时间的今日任务」合并进当日计划（存量数据迁移用）。 */
 export async function rebuildPlanFromTasks(
   dateStr = todayStr(),
