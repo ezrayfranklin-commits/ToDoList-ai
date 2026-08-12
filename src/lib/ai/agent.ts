@@ -1,16 +1,13 @@
-// Hermes-style agent loop (TS 移植版, 规划 v0.11).
+// 内置智能体主循环 (自研, 纯 TS, 零安装、跑在应用内).
 //
-// 框架逻辑移植自 open-source agent framework (github.com/open-source agent framework,
-// MIT) 的核心 turn 循环设计——纯 TS 实现, 零安装、跑在应用内:
-//   - 多轮工具调用循环 (conversation_loop)
-//   - 错误分类 FailoverReason (error_classifier): RegionError/鉴权不可重试,
-//     5xx/429/网络抖动可重试 (jittered backoff, 每次尝试一次性守卫)
-//   - 工具调用参数修复 _repair_tool_call_arguments (message_sanitization 思路)
-//   - 输出清洗 sanitize (防非 ASCII/控制字符破坏渲染)
-//   - 用户中断 estop: signal.abort 立即结束本轮, 标记中断消息
+// 一个健壮的多轮工具调用循环, 面向本地 Ollama 与 OpenAI 兼容网关:
+//   - 多轮工具调用, 直到模型给出最终回答或超过 maxTurns
+//   - 错误分类重试: 鉴权/区域错误不重试并提示, 5xx/429/网络抖动退避重试一次
+//   - 工具参数修复: 模型输出的坏 JSON 自动去 code fence / 截取 {} / 去尾逗号
+//   - 输出清洗: 去除 null 与控制字符, 防渲染与存储问题
+//   - 用户中断: signal.abort 立即结束本轮, 标记中断消息
 //
-// 本项目的提示词 (DEFAULT_SYSTEM)、工具集 (tools)、搜索 Skill (search)
-// 与数据层全部保持不变, 仅 agent 循环机制更换。
+// 提示词 (DEFAULT_SYSTEM)、工具集 (tools) 与数据层为独立模块, 与本循环一一对应.
 
 import { endpoint, friendlyHttpError, type ChatMessage } from "@/lib/ai/ollama";
 import { format } from "date-fns";
@@ -93,7 +90,7 @@ async function defaultFetch(input: RequestInfo | URL, init?: RequestInit): Promi
 }
 
 // ---------------------------------------------------------------------------
-// Hermes 机制 1: 错误分类 (error_classifier.FailoverReason 移植)
+// 机制 1: 错误分类重试 (鉴权/区域不重试, 5xx/429/网络抖动可重试)
 // ---------------------------------------------------------------------------
 
 type FailoverReason =
@@ -110,14 +107,14 @@ function classifyApiError(status: number, body: string): FailoverReason {
   return "fatal";
 }
 
-/** jittered backoff (retry_utils.jittered_backoff 思路): base*2^n ± 30% */
+/** jittered backoff: base*2^n ± 30%, 指数退避带随机抖动防止同时重试。 */
 function jitteredBackoffMs(attempt: number): number {
   const base = 800 * 2 ** attempt;
   return Math.round(base * (0.7 + Math.random() * 0.6));
 }
 
 // ---------------------------------------------------------------------------
-// Hermes 机制 2: 工具调用参数修复 (message_sanitization 思路)
+// 机制 2: 工具调用参数修复 (坏 JSON 自动修复)
 // ---------------------------------------------------------------------------
 
 /** 尝试修复模型输出的坏 JSON 参数: 去 code fence / 截取 {} 区间 / 去尾逗号。 */
@@ -159,7 +156,7 @@ function parseArgs(raw: string | undefined): Record<string, unknown> | null {
 }
 
 // ---------------------------------------------------------------------------
-// Hermes 机制 3: 输出清洗 (message_sanitization 思路)
+// 机制 3: 输出清洗 (去除控制字符, 防渲染/存储问题)
 // ---------------------------------------------------------------------------
 
 /** 清洗模型输出: 去除 null 字符/控制字符, 防渲染与存储问题。 */
@@ -171,7 +168,7 @@ export function sanitizeText(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// 单次模型调用 (带 带守卫的重试: 一次性守卫 + jittered backoff)
+// 单次模型调用 (带重试: 一次性守卫 + jittered backoff)
 // ---------------------------------------------------------------------------
 
 interface ChatOnceResult {
@@ -187,7 +184,7 @@ async function chatOnce(
   fetchImpl: typeof fetch,
   signal?: AbortSignal,
 ): Promise<ChatOnceResult> {
-  // 重试守卫: 每个错误分类只重试一次（TurnRetryState 思路）
+  // 重试守卫: 每个错误分类只重试一次
   let retryableAttempted = false;
   let lastError: unknown = null;
 
@@ -243,7 +240,7 @@ async function chatOnce(
 }
 
 // ---------------------------------------------------------------------------
-// 主循环 (conversation_loop 移植): 多轮工具调用 → 最终回答
+// 主循环: 多轮工具调用 -> 最终回答
 // ---------------------------------------------------------------------------
 
 export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
@@ -297,7 +294,7 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
       } else {
         const args = parseArgs(call.function.arguments);
         if (args === null) {
-          // 参数损坏且无法修复: 反馈模型重新调用（参数修复失败路径）
+          // 参数损坏且无法修复: 反馈模型重新调用
           out = `工具 ${call.function.name} 的参数不是合法 JSON（原始: ${String(
             call.function.arguments,
           ).slice(0, 120)}），请重新调用该工具并给出合法 JSON 参数。`;
