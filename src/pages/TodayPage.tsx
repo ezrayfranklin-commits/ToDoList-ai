@@ -188,8 +188,10 @@ export function TodayPage() {
       </div>
 
       {/* 右侧: 今日规划竖边栏（与左侧、中间融为一体，无边框分隔） */}
-      <aside className="flex w-[330px] shrink-0 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {/* Header: 日期 + 日历（弹窗查看/增删改查规划） */}
+      {/* 结构: 顶部冻结区(标题+日历按钮) + 下方独立滚动区, 滚动时日历始终可点 */}
+      <aside className="flex w-[330px] shrink-0 flex-col px-4 py-4">
+        {/* 冻结区: 标题 + 日历按钮(不随下面内容滚动) */}
+        <div className="flex shrink-0 flex-col gap-3 pb-3">
         <div>
           <h1 className="text-[15px] font-bold tracking-tight">今日规划</h1>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
@@ -209,7 +211,11 @@ export function TodayPage() {
         </Button>
 
         <PlanCalendar open={calendarOpen} onOpenChange={setCalendarOpen} />
+        </div>
 
+        {/* 可滚动区: 时间块列表 / 备注 / 其他待办 */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex min-h-full flex-col gap-3">
         {/* 时间块列表 */}
         {planLoading ? (
           <div className="flex flex-col gap-2">
@@ -291,6 +297,8 @@ export function TodayPage() {
           新想法先丢进 Inbox
           <Inbox className="h-3.5 w-3.5" />
         </button>
+        </div>
+        </div>
       </aside>
     </div>
   );
