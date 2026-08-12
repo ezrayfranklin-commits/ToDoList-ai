@@ -20,19 +20,10 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  CalendarDays,
-  GripVertical,
-  Inbox,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
+import { CalendarDays, GripVertical, Inbox, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
@@ -42,14 +33,12 @@ import {
   useToggleTask,
   useUpdatePlanBlocks,
 } from "@/hooks/queries";
-import { applyPlanToDb, planDoneCount, planProgress, planTotalCount } from "@/lib/ai/plan";
-import { runPlanning } from "@/lib/agent";
 import { displayDate, todayStr } from "@/lib/dates";
 import { useUI } from "@/store/ui";
 import { PriorityBadge, TaskRow } from "@/components/TaskRow";
 import { TodayChat } from "@/components/TodayChat";
 import { PlanCalendar } from "@/components/PlanCalendar";
-import type { DailyPlan, TimeBlock } from "@/lib/types";
+import type { TimeBlock } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function SortableBlock({
@@ -139,8 +128,6 @@ export function TodayPage() {
   const toggleTask = useToggleTask();
   const updateBlocks = useUpdatePlanBlocks();
   const { openTaskDialog, setView } = useUI();
-  const [planning, setPlanning] = useState(false);
-  const [applying, setApplying] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   // 当前时间（30s 刷新一次，用于超时判定）
   const [now, setNow] = useState(() => new Date());
@@ -166,36 +153,12 @@ export function TodayPage() {
     );
   }, [todayTasks, blocks]);
 
-  const done = planDoneCount({ ...plan!, data: plan?.data ?? null } as DailyPlan);
-  const total = planTotalCount({ ...plan!, data: plan?.data ?? null } as DailyPlan);
-  const progress = planProgress({ ...plan!, data: plan?.data ?? null } as DailyPlan);
   const backlogCount = openTasks?.length ?? 0;
 
   // 超时判定: 未完成 且 当前时间已超过块结束时间（HH:mm 定长可直接字符串比较）
   const isOverdue = (b: TimeBlock): boolean => {
     if (b.done || !b.end) return false;
     return nowHHmm() > b.end;
-  };
-
-  const planNow = async () => {
-    setPlanning(true);
-    const res = await runPlanning(today);
-    setPlanning(false);
-    if (res.ok) toast.success("AI 已生成今日计划草稿");
-    else toast.error(`规划失败：${res.error}`);
-  };
-
-  const confirmPlan = async () => {
-    if (!plan?.data) return;
-    setApplying(true);
-    try {
-      await applyPlanToDb(plan);
-      toast.success("计划已确认并写入任务清单 ✅");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "确认失败");
-    } finally {
-      setApplying(false);
-    }
   };
 
   const toggleBlock = async (block: TimeBlock, done: boolean) => {
@@ -247,55 +210,6 @@ export function TodayPage() {
 
         <PlanCalendar open={calendarOpen} onOpenChange={setCalendarOpen} />
 
-        {/* 计划状态（确认环节, 规划 §4.1） */}
-        {plan?.status === "draft" && (
-          <Card className="border-accent/30 bg-accent/[0.04]">
-            <CardContent className="flex flex-col gap-2.5 py-3">
-              <p className="text-[12px] leading-relaxed">
-                <span className="font-medium">AI 已生成 {total} 个时间块</span>
-                <span className="text-muted-foreground">，可先拖拽调整再确认。</span>
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={planNow}
-                  disabled={planning}
-                  className="flex-1"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" /> 重新生成
-                </Button>
-                <Button size="sm" onClick={confirmPlan} disabled={applying} className="flex-1">
-                  {applying ? "写入中…" : "确认计划"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {plan?.status === "confirmed" && (
-          <Card>
-            <CardContent className="py-3">
-              <div className="mb-1.5 flex items-center justify-between text-[12px]">
-                <span className="font-medium">
-                  今日进度 {done}/{total}
-                </span>
-                <span className="tabular-nums text-muted-foreground">{progress}%</span>
-              </div>
-              <Progress value={progress} className="h-1.5" />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={planNow}
-                disabled={planning}
-                className="mt-2 h-7 w-full text-[12px] text-muted-foreground"
-              >
-                <RefreshCw className="h-3 w-3" /> 重新规划
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
         {/* 时间块列表 */}
         {planLoading ? (
           <div className="flex flex-col gap-2">
@@ -315,7 +229,7 @@ export function TodayPage() {
                     onClick={() =>
                       b.taskId != null
                         ? openTaskDialog(b.taskId)
-                        : toast.info("该时间块尚未关联任务，确认计划后自动创建")
+                        : toast.info("该时间块尚未关联任务")
                     }
                     overdue={isOverdue(b)}
                   />
