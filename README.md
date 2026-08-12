@@ -96,7 +96,16 @@ npm run tauri build # 打包 DMG
 | 系统联动 | 通过 `remindctl` 读取 Apple 提醒事项/日历（仅读取，需系统授权） |
 | 网络白名单 | AI 请求经 tauri-plugin-http（Rust 代理，无 CORS 问题），白名单见 `src-tauri/capabilities/default.json` |
 
-> `.gitignore` 已忽略 `node_modules` / `dist` / 日志。仓库采用 MIT 协议（见 `LICENSE`）。
+> `.gitignore` 已忽略 `node_modules` / `dist` / 日志。仓库采用 PolyForm Noncommercial
+> License 1.0.0（见 `LICENSE`）。
+
+## 许可与商用限制
+
+本项目采用 **PolyForm Noncommercial License 1.0.0**（见 `LICENSE`）：
+
+- ✅ **允许**：个人学习、研究、实验、自用、二次开发分享，以及公益组织 / 学校 / 科研机构 / 政府等非商业机构使用；修改、分发、制作衍生作品（须保留协议与署名）。
+- ❌ **禁止**：任何形式的**商业变现**——包括但不限于售卖本软件或衍生品、收费托管 / SaaS 服务、将本项目或衍生代码用于商业产品、商业培训 / 咨询等以营利为目的的活动。
+- 需要商业授权请直接联系作者。
 
 ## 目录结构
 
