@@ -80,7 +80,7 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "web_search",
       description:
-        "联网搜索（DuckDuckGo），返回标题/链接/摘要。用于查询最新信息、新闻、价格、资料等。",
+        "联网搜索（DuckDuckGo/Google/Bing 多引擎自动回退），返回标题/链接/摘要。用于查询最新信息、新闻、价格、资料等。",
       parameters: {
         type: "object",
         properties: {

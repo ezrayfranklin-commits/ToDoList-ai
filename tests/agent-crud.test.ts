@@ -340,6 +340,32 @@ function buildCases(): Case[] {
         return { ok: Number(left[0]?.c ?? 0) === 0, detail: `DB 中「吃药」剩余 ${left[0]?.c} 个 (期望 0)` };
       },
     },
+    {
+      name: "搜: 联网搜索返回真实结果",
+      message: "请用联网搜索功能搜一下：特朗普最近在干什么？然后把找到的来源标题和链接列出来",
+      verify: () => {
+        // 独立直查审计表: 应有 web_search 工具调用记录且结果含真实链接
+        const rows = query(
+          "SELECT context, result FROM agent_runs WHERE run_type='tool' ORDER BY id",
+        ) as Array<{ context: string; result: string }>;
+        const webCalls = rows.filter((r) => {
+          try {
+            return JSON.parse(r.context)?.tool === "web_search";
+          } catch {
+            return false;
+          }
+        });
+        if (webCalls.length === 0) {
+          return { ok: false, detail: "agent_runs 审计表中没有 web_search 调用记录 (模型可能没调用搜索工具)" };
+        }
+        const last = webCalls[webCalls.length - 1];
+        const hasLinks = /https?:\/\//.test(last.result);
+        return {
+          ok: hasLinks,
+          detail: `web_search 调用 ${webCalls.length} 次; 最后一次结果含真实链接: ${hasLinks ? "是" : "否"} (${last.result.slice(0, 100)})`,
+        };
+      },
+    },
   ];
 }
 
