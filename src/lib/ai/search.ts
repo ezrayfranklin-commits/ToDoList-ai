@@ -1,8 +1,7 @@
-// Web search skill for the chat agent (移植自 pi 的 web-search 扩展,
-// ~/.config/app/agent/extensions/web-search.ts).
+// Web search for the chat agent (内置联网搜索工具).
 //
-// 搜索引擎: DuckDuckGo 优先（Google 服务器端抓取常被拦截，用户明确要求 DDG）；
-// Google 保留为 fallback（pi 原有逻辑，可通过 GOOGLE_SEARCH_BASE_URL 配置镜像）。
+// 搜索引擎: DuckDuckGo 优先（Google 服务器端抓取常被拦截）；
+// Google 作为 fallback（可通过 GOOGLE_SEARCH_BASE_URL 配置镜像）。
 // 无需 API key。webview 内通过 tauri-plugin-http 发起请求（无 CORS 问题）。
 
 export interface SearchResult {
@@ -21,7 +20,7 @@ const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 // ---------------------------------------------------------------------------
-// Pure parsing helpers (mirrors pi's implementation)
+// Pure parsing helpers (无外部依赖)
 // ---------------------------------------------------------------------------
 
 export function htmlDecode(input: string): string {
@@ -181,7 +180,7 @@ export async function webSearch(
     const results = await fetchDuckDuckGo(q, n, fetchImpl);
     return { engine: "duckduckgo", results };
   } catch (ddgErr) {
-    // Google fallback (kept from pi's original logic)
+    // Google fallback
     try {
       const results = await fetchGoogle(q, n, baseUrl, fetchImpl);
       return { engine: "google (ddg failed: " + (ddgErr as Error).message + ")", results };

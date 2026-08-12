@@ -246,7 +246,7 @@ export function TodayChat() {
         return `已删除「${t.title}」。`;
       }
       case "general": {
-        // pi 式工具调用: 模型判断需要搜索 → 执行 DuckDuckGo → 结果交给模型回答
+        // 工具调用: 模型判断需要搜索 -> 执行 DuckDuckGo -> 结果交给模型回答
         if (intent.needsSearch === "yes" && intent.searchQuery) {
           const { results, engine, error } = await webSearch(intent.searchQuery, 5);
           if (results.length > 0) {
@@ -305,7 +305,7 @@ export function TodayChat() {
         await renameConversation.mutateAsync({ id: convId, title });
       }
 
-      // pi 式 agent 循环（GUI 套壳本地 CLI）: 模型自主多轮调用工具
+      // agent 循环（GUI 套壳本地 CLI）: 模型自主多轮调用工具
       // （web_search / add_task / complete / reschedule / delete / plan_today），
       // 不限制工具使用；anthropic 协议不同，暂走原单意图路由。
       let reply: string;

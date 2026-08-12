@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   Clock,
-  Download,
   Loader2,
   Plus,
   Target,
@@ -41,8 +40,6 @@ import {
 } from "@/components/ui/command";
 import { toast } from "sonner";
 import { useSettings } from "@/store/settings";
-import { getSetting } from "@/lib/db";
-import { importAppConfig } from "@/lib/appConfig";
 import { PROVIDERS, pingModel, type ProviderId } from "@/lib/ai/provider";
 import { checkRemindersBridge, type BridgeStatus } from "@/lib/reminders";
 import { nextRuns } from "@/lib/scheduler";
@@ -134,38 +131,10 @@ export function SettingsPage() {
   const [testResult, setTestResult] = useState<{ ok: boolean; detail: string } | null>(null);
   const [newGoal, setNewGoal] = useState("");
   const [newGoalDate, setNewGoalDate] = useState("");
-  const [importing, setImporting] = useState(false);
-  const [piImportedAt, setPiImportedAt] = useState<string | null>(null);
-  const [piImportedFrom, setPiImportedFrom] = useState<string | null>(null);
 
   useEffect(() => {
     checkRemindersBridge().then(setBridge);
-    getSetting<string | null>("piImportedAt", null).then(setPiImportedAt);
-    getSetting<string | null>("piImportedFrom", null).then(setPiImportedFrom);
   }, []);
-
-  const importFromPi = async () => {
-    setImporting(true);
-    try {
-      const picked = await importAppConfig();
-      await settings.update({
-        provider: picked.provider,
-        baseUrl: picked.baseUrl,
-        apiKey: picked.apiKey,
-        model: picked.model,
-      });
-      const now = new Date().toISOString();
-      setPiImportedAt(now);
-      setPiImportedFrom(picked.sourceProvider);
-      toast.success(
-        `已从工具链导入：${picked.sourceProvider} / ${picked.model}（仅保存在本应用，不影响 pi）`,
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "导入失败");
-    } finally {
-      setImporting(false);
-    }
-  };
 
   const test = async () => {
     setTesting(true);
@@ -307,38 +276,6 @@ export function SettingsPage() {
                   <span className="max-w-[280px] truncate">{testResult.detail}</span>
                 </span>
               )}
-            </div>
-
-            {/* 从本机 pi 一键导入（只读，值复制） */}
-            <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[12px] font-medium">配置来源</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {piImportedAt
-                      ? `从本机 pi 导入（${piImportedFrom ?? ""}，${new Date(piImportedAt).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" })}）`
-                      : "手动配置"}
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={importFromPi}
-                  disabled={importing}
-                  className="shrink-0 gap-1"
-                >
-                  {importing ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  从工具链导入
-                </Button>
-              </div>
-              <p className="text-[10.5px] leading-relaxed text-muted-foreground">
-                仅读取 ~/.config/app/agent/ 配置并复制到本应用沙盒，绝不写入源配置文件；源配置之后改了
-                Key/模型不会同步，需重新导入。本应用配置与 pi 完全隔离、互不影响。
-              </p>
             </div>
           </CardContent>
         </Card>
