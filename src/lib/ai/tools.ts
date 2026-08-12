@@ -98,12 +98,12 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "add_task",
       description:
-        "添加一个任务。用户提到日期/时刻时填入 scheduledDate（今天/明天/后天/YYYY-MM-DD）与 timeStart（HH:mm，下午3点→15:00）；没提到就填空字符串（任务进 Inbox）。",
+        "添加一个任务。用户提到日期/时刻时填 scheduledDate 与 timeStart：scheduledDate 填换算后的具体日期（YYYY-MM-DD；今天/明天/本周五/下周一等相对说法先换算成具体日期再填）与 timeStart（HH:mm，下午3点→15:00）；没提到就填空字符串（任务进 Inbox）。",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string", description: "任务标题" },
-          scheduledDate: { type: "string", description: "今天/明天/后天/YYYY-MM-DD，没有则空" },
+          scheduledDate: { type: "string", description: "YYYY-MM-DD（今天/明天/本周五等相对日期换算成具体日期），没有则空" },
           timeStart: { type: "string", description: "HH:mm，没有则空" },
         },
         required: ["title", "scheduledDate", "timeStart"],
@@ -165,12 +165,12 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
     {
       name: "reschedule_task",
       description:
-        "把某个任务改期/顺延。targetDate 填 今天/明天/后天/YYYY-MM-DD。title 用用户提到的任务名。",
+        "把某个任务改期/顺延。targetDate 填换算后的具体日期（YYYY-MM-DD；今天/明天/本周五等相对说法先换算成具体日期再填）。title 用用户提到的任务名。",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string", description: "任务标题" },
-          targetDate: { type: "string", description: "今天/明天/后天/YYYY-MM-DD" },
+          targetDate: { type: "string", description: "YYYY-MM-DD（今天/明天/本周五等换算成具体日期）" },
         },
         required: ["title", "targetDate"],
       },
@@ -230,7 +230,7 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
       parameters: {
         type: "object",
         properties: {
-          date: { type: "string", description: "今天/明天/YYYY-MM-DD，空字符串=不限" },
+          date: { type: "string", description: "今天/明天/本周五/YYYY-MM-DD，空字符串=不限" },
           timeFrom: { type: "string", description: "起始时刻 HH:mm（如 12:00），空字符串=不限" },
           timeTo: { type: "string", description: "结束时刻 HH:mm（如 18:00），空字符串=不限" },
           status: { type: "string", description: "未完成/已完成/全部，空字符串=未完成" },

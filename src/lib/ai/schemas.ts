@@ -81,7 +81,7 @@ export const chatIntentSchema = z.object({
   target: z
     .string()
     .describe(
-      'reschedule 的目标时间，格式："今天"、"明天"、"后天"或"YYYY-MM-DD"；其他动作填空字符串',
+      'reschedule 的目标时间，格式："今天"、"明天"、"后天"或"YYYY-MM-DD"（本周五/下周一等相对日期换算成具体日期）；其他动作填空字符串',
     ),
   reply: z
     .string()
@@ -101,7 +101,7 @@ export const chatIntentSchema = z.object({
   scheduledDate: z
     .string()
     .describe(
-      "add_task 时用户提到的日期：'今天'/'明天'/'后天'/'YYYY-MM-DD'；没提填空字符串",
+      "add_task 时用户提到的日期：'今天'/'明天'/'后天'/'YYYY-MM-DD'（本周五/下周一等相对日期换算成具体日期）；没提填空字符串",
     ),
   timeStart: z
     .string()

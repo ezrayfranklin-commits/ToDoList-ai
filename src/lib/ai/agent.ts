@@ -13,6 +13,8 @@
 // 与数据层全部保持不变, 仅 agent 循环机制更换。
 
 import { endpoint, friendlyHttpError, type ChatMessage } from "@/lib/ai/ollama";
+import { format } from "date-fns";
+import { weekdayCN } from "@/lib/dates";
 import type { AISettings } from "@/lib/types";
 
 /** 一个可调用工具：元数据（扁平 JSON Schema，Ollama 兼容）+ 执行函数。 */
@@ -63,6 +65,22 @@ const DEFAULT_SYSTEM = `你是 TodoList AI 内置的本地智能体，运行在�
 - 每个工具返回结果后，若还需更多信息可继续调用其他工具。
 - 最终用中文给用户简洁清晰的总结；用户闲聊时直接友好回答，无需调用工具。
 - 消息里提到的任务名，如与工具参数需要精确匹配，尽量用用户原话。`;
+
+/**
+ * 当前日期上下文块: 拼接进系统提示, 让模型能换算"本周五/下周一"等相对日期.
+ * 模型没有实时时钟, 不给它日期它只能猜或反问用户.
+ */
+export function dateContextBlock(now: Date = new Date()): string {
+  const today = format(now, "yyyy-MM-dd");
+  const weekday = weekdayCN(now);
+  const hm = format(now, "HH:mm");
+  return (
+    `\n[当前时间] 今天是 ${today}（${weekday}），当前时刻 ${hm}。` +
+    `\n换算规则：用户说「今天」即 ${today}，「明天」是 ${today} 的次日；` +
+    `「本周五/下周一/上周三」等相对日期请先换算成具体的 YYYY-MM-DD 再填入工具参数，` +
+    `不要在回答中反问用户今天是几号。`
+  );
+}
 
 let tauriFetchFn: typeof fetch | null = null;
 
@@ -242,7 +260,7 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
   } = params;
 
   const messages: ChatMessage[] = [
-    { role: "system", content: system },
+    { role: "system", content: `${system}\n${dateContextBlock()}` },
     ...history.map((h): ChatMessage => ({ role: h.role, content: h.content })),
     { role: "user", content: userMessage },
   ];

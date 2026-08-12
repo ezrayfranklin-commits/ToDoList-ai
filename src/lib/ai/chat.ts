@@ -10,8 +10,8 @@ import { getModel } from "@/lib/ai/provider";
 import { generateStructured } from "@/lib/ai/ollama";
 import { chatIntentSchema, type ChatIntent } from "@/lib/ai/schemas";
 import { logRun } from "@/lib/ai/plan";
-import { todayStr, tomorrowStr, toDateStr } from "@/lib/dates";
-import { addDays, parseISO } from "date-fns";
+import { todayStr, tomorrowStr, toDateStr, weekdayCN } from "@/lib/dates";
+import { addDays, parseISO, startOfDay } from "date-fns";
 import type { AISettings, Task } from "@/lib/types";
 
 export interface ChatContext {
@@ -32,9 +32,9 @@ const CHAT_SYSTEM = `你是 TodoList AI 的对话助手，用户通过自然语�
 判断用户意图并输出结构化结果：
 - "规划今天"/"重新规划" → plan 或 replan（已有计划则 replan）
 - "加任务：xxx"/"添加xxx"/"记一下xxx" → add_task
-  （用户提到日期/时刻时填 scheduledDate（今天/明天/YYYY-MM-DD）与 timeStart（HH:mm，如 下午3点→15:00））
+  （用户提到日期/时刻时填 scheduledDate（今天/明天/YYYY-MM-DD；本周五/下周一等相对日期请换算成具体日期）与 timeStart（HH:mm，如 下午3点→15:00））
 - "完成xxx"/"xxx做完了" → complete
-- "把xxx顺延到明天"/"改到后天"/"推迟xxx" → reschedule（target 填 今天/明天/后天/YYYY-MM-DD）
+- "把xxx顺延到明天"/"改到后天"/"推迟xxx" → reschedule（target 填 今天/明天/后天/YYYY-MM-DD，相对日期同理换算成具体日期）
 - "删掉xxx"/"删除xxx" → delete
 - 其他对话 → general，reply 直接回答；若问题需要联网才能回答
   （时效信息/新闻/价格/外部事实等），needsSearch=yes 并给出简洁的 searchQuery
@@ -75,7 +75,7 @@ export function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
   if (addMatch && addMatch[1]) {
     const title = addMatch[1].trim();
     // 从原文提取日期与时刻（模型不可用时的兜底）
-    const dateHint = clean.match(/(今天|明天|后天|\d{4}-\d{2}-\d{2})/)?.[1] ?? "";
+    const dateHint = clean.match(/(今天|明天|后天|本(?:周|星期)[日天一二三四五六]|这(?:周|星期)[日天一二三四五六]|下(?:周|星期)[日天一二三四五六]|上(?:周|星期)[日天一二三四五六]|(?:周|星期)[日天一二三四五六]|\d{4}-\d{2}-\d{2})/)?.[1] ?? "";
     const timeHint = parseTimeHint(clean);
     return {
       action: "add_task",
@@ -101,7 +101,7 @@ export function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       reply: "收到，帮你标记完成。",
     };
   }
-  const deferMatch = clean.match(/(?:顺延|推迟|改到|挪到|延到)\s*(.+?)\s*(?:到|至)?\s*(今天|明天|后天|\d{4}-\d{2}-\d{2})/);
+  const deferMatch = clean.match(/(?:顺延|推迟|改到|挪到|延到)\s*(.+?)\s*(?:到|至)?\s*(今天|明天|后天|本(?:周|星期)[日天一二三四五六]|这(?:周|星期)[日天一二三四五六]|下(?:周|星期)[日天一二三四五六]|上(?:周|星期)[日天一二三四五六]|(?:周|星期)[日天一二三四五六]|\d{4}-\d{2}-\d{2})/);
   if (deferMatch) {
     return {
       action: "reschedule",
@@ -173,7 +173,7 @@ export async function runChatAgent(
           .map((h) => `${h.role === "user" ? "用户" : "助手"}：${h.content}`)
           .join("\n")}`
       : "";
-  const prompt = `用户消息：${message}${historyBlock}\n\n当前状态：${JSON.stringify(statusBrief)}\n\n请判断意图并回复。`;
+  const prompt = `今天是 ${ctx.date}（${weekdayCN(new Date(ctx.date + "T00:00:00"))}）。\n用户消息：${message}${historyBlock}\n\n当前状态：${JSON.stringify(statusBrief)}\n\n请判断意图并回复。`;
   try {
     let intent: ChatIntent;
     // 30s 整体超时：模型挂起/网关卡住时保证必有回复（fallback），不白屏不静默
@@ -238,7 +238,37 @@ export function findTask(
   return contains ?? null;
 }
 
-/** Parse chat target ("今天"/"明天"/"后天"/YYYY-MM-DD) into a date string. */
+/** 中文星期 -> 距本周一的天数 (周一=0 ... 周日=6). */
+const WEEKDAY_CN: Record<string, number> = {
+  一: 0, 二: 1, 三: 2, 四: 3, 五: 4, 六: 5, 日: 6, 天: 6,
+};
+
+/**
+ * 解析"本周五/这周五/下周一/上周三/周五/星期五"等相对星期为 YYYY-MM-DD.
+ * - 本周/这周 X: 本周一(周起点)的那天; 若已过今天, 顺延到下一次(提醒语义).
+ * - 下周 X: 下一周对应那天; 上周 X: 上一周对应那天.
+ * - 裸"周五/星期五": 最近的未来那天(今天即今天).
+ * 解析不了返回 null.
+ */
+export function parseWeekdayTarget(s: string): string | null {
+  const t = s.trim();
+  const m = t.match(/^((?:本|这|下|上)周|周|星期)(日|天|一|二|三|四|五|六)$/);
+  if (!m) return null;
+  const dow = WEEKDAY_CN[m[2]];
+  if (dow === undefined) return null;
+  const today = startOfDay(new Date());
+  const todayDow = today.getDay();
+  // 本周一（以周一为一周起点）
+  const monday = addDays(today, -((todayDow + 6) % 7));
+  if (m[1] === "下周") return toDateStr(addDays(monday, dow + 7));
+  if (m[1] === "上周") return toDateStr(addDays(monday, dow - 7));
+  // 本周/这周/裸「周X/星期X」：取该周对应天，已过则顺延到下一次
+  let d = addDays(monday, dow);
+  if (d < today) d = addDays(d, 7);
+  return toDateStr(d);
+}
+
+/** Parse chat target ("今天"/"明天"/"后天"/"本周五"/YYYY-MM-DD) into a date string. */
 export function parseTarget(target: string): string {
   switch (target.trim()) {
     case "今天":
@@ -249,7 +279,10 @@ export function parseTarget(target: string): string {
       return toDateStr(addDays(parseISO(todayStr() + "T00:00:00"), 2));
     default: {
       const m = target.trim().match(/^\d{4}-\d{2}-\d{2}$/);
-      return m ? m[0] : tomorrowStr();
+      if (m) return m[0];
+      const wd = parseWeekdayTarget(target);
+      if (wd) return wd;
+      return tomorrowStr();
     }
   }
 }
@@ -280,10 +313,10 @@ export function parseTimeHint(s: string | null | undefined): string | null {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-/** 从原文提取日期提示（今天/明天/后天/YYYY-MM-DD），解析为日期串，没有返回 null。 */
+/** 从原文提取日期提示 (今天/明天/后天/本周X/YYYY-MM-DD), 解析为日期串, 没有返回 null. */
 export function parseDateHint(s: string | null | undefined): string | null {
   if (!s) return null;
-  const m = s.match(/(今天|明天|后天|\d{4}-\d{2}-\d{2})/);
+  const m = s.match(/(今天|明天|后天|本(?:周|星期)[日天一二三四五六]|这(?:周|星期)[日天一二三四五六]|下(?:周|星期)[日天一二三四五六]|上(?:周|星期)[日天一二三四五六]|(?:周|星期)[日天一二三四五六]|\d{4}-\d{2}-\d{2})/);
   return m ? parseTarget(m[1]) : null;
 }
 
