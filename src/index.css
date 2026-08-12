@@ -107,7 +107,8 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* 超时未完成时间块: 七彩光环闪烁提醒（v0.9 特效）                       */
+/* 超时未完成时间块: 边缘七彩光环（v0.9.1, 低调隐约版）                  */
+/* 用 mask 挖空中间, 只留 2px 边框环, 七彩沿边框缓缓流动 + 半透明       */
 /* ------------------------------------------------------------------ */
 @keyframes ring-spin {
   to {
@@ -115,19 +116,18 @@
   }
 }
 
-/* 外层: 圆角容器, 溢出裁剪, 光环厚度 2px */
 .overdue-ring {
   position: relative;
   border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 0 10px rgba(255, 68, 68, 0.25);
 }
 
-/* 渐变旋转层: 超出容器 50% 的正方形, 旋转时四角不外露 */
+/* 边框环: 凸出容器 2px, 中间挖空, 慢速旋转流动, 半透明隐约 */
 .overdue-ring::before {
   content: "";
   position: absolute;
-  inset: -50%;
+  inset: -2px;
+  border-radius: 10px;
+  padding: 2px;
   background: conic-gradient(
     from 0deg,
     #ff0044,
@@ -139,10 +139,16 @@
     #cc44ff,
     #ff0044
   );
-  animation: ring-spin 3s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: ring-spin 8s linear infinite;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
-/* 内容层盖住中心, 只露出边缘 2px 光环 */
+/* 内容层盖在光环之上 */
 .overdue-ring > * {
   position: relative;
   z-index: 1;
