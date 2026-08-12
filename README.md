@@ -16,7 +16,7 @@
 - **计划确认与调整** — dnd-kit 拖拽排序时间块、增删任务
 - **执行与跟踪** — 勾选完成、进度条、时间块展示
 - **晚间复盘** — 21:00 智能体总结完成度，未完成任务自动顺延明日
-- **系统联动** — 通过 remindctl 桥接读取 Apple 提醒事项/日历（M3，需授权）
+- **系统联动** — 通过 remindctl 桥接读取 Apple 提醒事项/日历（**开发中**，设置页已置灰）
 - **本地优先** — SQLite（tauri-plugin-sql）+ Drizzle 迁移；Ollama 隐私模式
 
 ## OpenAI 兼容端点（DeepSeek 等第三方）
@@ -92,13 +92,11 @@ npm run tauri build # 打包 DMG
 | API Key | 仅存本机 SQLite `settings` 表（明文 JSON，仅本机、不上传；换机器需重新填写） |
 | `agent_runs` 日志 | 本机记录 AI 提示词/输出/反馈，仅用于提示词迭代，不对外发送 |
 | 云端模型 | 配置 OpenAI / Anthropic / DeepSeek 等云端提供商时，对话内容、任务与今日计划上下文会发送到对应模型服务商；**选择本地 Ollama 则完全不外发（隐私模式）** |
-| 联网搜索 | 搜索词发送到 DuckDuckGo（失败时回退 Google），见 `src/lib/ai/search.ts` |
+| 联网搜索 | 搜索词发送到 DuckDuckGo（失败时依次回退 Google / Bing），见 `src/lib/ai/search.ts` |
 | 系统联动 | 通过 `remindctl` 读取 Apple 提醒事项/日历（仅读取，需系统授权） |
 | 网络白名单 | AI 请求经 tauri-plugin-http（Rust 代理，无 CORS 问题），白名单见 `src-tauri/capabilities/default.json` |
 
-> 开源提示：`design doc*.md` 是本地开发文档，**未纳入版本控制**，不会随仓库发布；
-> `.gitignore` 已忽略 `node_modules` / `dist` / 日志。仓库目前无 LICENSE，首次公开建议补充
-> （如 MIT）后再推送。
+> `.gitignore` 已忽略 `node_modules` / `dist` / 日志。仓库采用 MIT 协议（见 `LICENSE`）。
 
 ## 目录结构
 
@@ -137,7 +135,8 @@ node tests/run-agent-crud.mjs
 - 每次工具调用都会写入测试库的 `agent_runs` (run_type=`tool`), 测试结束打印
   审计日志, 可追溯每条增删改查实际执行结果.
 - 用例: 增(带日期时间) / 查(按日期) / 改(改期) / 完成 / 删(带日期精确删) /
-  防误删(模糊同名不给日期) / 防谎报(删不存在的任务).
+  防误删(模糊同名不给日期) / 防谎报(删不存在的任务) / 批量删范围 / 批量删全部 /
+  联网搜索(真实搜索返回链接).
 
 ## 里程碑状态
 
