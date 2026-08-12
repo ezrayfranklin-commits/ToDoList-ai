@@ -107,12 +107,16 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* 超时未完成时间块: 边缘七彩光环（v0.9.1, 低调隐约版）                  */
-/* 用 mask 挖空中间, 只留 2px 边框环, 七彩沿边框缓缓流动 + 半透明       */
+/* 超时未完成时间块: 边缘七彩光环（v0.9.2, 静态不旋转）                  */
+/* mask 挖空中间只留 2px 边框环, 七彩静态显示, 仅轻微呼吸闪烁          */
 /* ------------------------------------------------------------------ */
-@keyframes ring-spin {
-  to {
-    transform: rotate(360deg);
+@keyframes ring-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
   }
 }
 
@@ -121,7 +125,7 @@
   border-radius: 8px;
 }
 
-/* 边框环: 凸出容器 2px, 中间挖空, 慢速旋转流动, 半透明隐约 */
+/* 边框环: 凸出容器 2px, 中间挖空, 静态七彩, 半透明呼吸隐约闪烁 */
 .overdue-ring::before {
   content: "";
   position: absolute;
@@ -143,8 +147,7 @@
   -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
-  animation: ring-spin 8s linear infinite;
-  opacity: 0.6;
+  animation: ring-breathe 3s ease-in-out infinite;
   pointer-events: none;
 }
 
