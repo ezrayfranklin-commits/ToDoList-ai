@@ -259,7 +259,7 @@ export function TodayPage() {
               <div>
                 <p className="text-[12.5px] font-medium">今天还没有计划</p>
                 <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-                  对中间的 AI 说「规划今天」，或点上方按钮
+                  对中间的 AI 说「加任务：…」添加待办
                 </p>
               </div>
             </CardContent>

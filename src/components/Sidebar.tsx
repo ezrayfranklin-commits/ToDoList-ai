@@ -151,7 +151,7 @@ export function Sidebar() {
         />
         {!plan && taskTotal === 0 && (
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-            点击 ⌘K 或「一键规划」开始
+            点击 ⌘K 开始
           </p>
         )}
       </div>

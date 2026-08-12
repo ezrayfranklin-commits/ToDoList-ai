@@ -1,8 +1,8 @@
 // ⌘K command palette (shadcn Command, Spotlight-like, 规划 §2.3).
-// Quick-add inbox items + view jumps + one-click planning.
+// Quick-add inbox items + view jumps.
 
 import { useMemo, useState } from "react";
-import { CalendarCheck2, Inbox, ListChecks, Plus, Settings, Sparkles, Search } from "lucide-react";
+import { CalendarCheck2, Inbox, ListChecks, Plus, Settings, Search } from "lucide-react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -14,14 +14,12 @@ import {
 import { useUI } from "@/store/ui";
 import { useCreateTask, useInboxTasks } from "@/hooks/queries";
 import { toast } from "sonner";
-import { runPlanning } from "@/lib/agent";
 
 export function CommandPalette() {
   const { paletteOpen, openPalette, setView, openTaskDialog } = useUI();
   const { data: inbox } = useInboxTasks();
   const createTask = useCreateTask();
   const [query, setQuery] = useState("");
-  const [planning, setPlanning] = useState(false);
 
   const quickAdd = useMemo(
     () => query.trim().length > 0 && !inbox?.some((t) => t.title === query.trim()),
@@ -32,19 +30,6 @@ export function CommandPalette() {
     await createTask.mutateAsync({ title, status: "inbox", source: "inbox" });
     toast.success(`已加入 Inbox：「${title}」`);
     setQuery("");
-  };
-
-  const planNow = async () => {
-    setPlanning(true);
-    const res = await runPlanning();
-    setPlanning(false);
-    if (res.ok) {
-      toast.success("今日计划已生成，请确认");
-      setView("today");
-    } else {
-      toast.error(`规划失败：${res.error}`);
-    }
-    openPalette(false);
   };
 
   return (
@@ -80,10 +65,6 @@ export function CommandPalette() {
           ))}
         </CommandGroup>
         <CommandGroup heading="操作">
-          <CommandItem value="plan:now" onSelect={planNow} disabled={planning}>
-            <Sparkles className="h-4 w-4" />
-            {planning ? "规划中…" : "一键规划今日"}
-          </CommandItem>
           <CommandItem value="go:today" onSelect={() => { setView("today"); openPalette(false); }}>
             <CalendarCheck2 className="h-4 w-4" />
             前往今日计划

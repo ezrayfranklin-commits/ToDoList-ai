@@ -65,11 +65,11 @@ function MarkdownContent({ text }: { text: string }) {
 function greeting(planStatus: ChatContext["planStatus"], blockCount: number): string {
   switch (planStatus) {
     case "draft":
-      return `AI 已生成今日计划草稿（${blockCount} 个时间块）。可以直接说「确认」，或让我「重新规划」；也可以拖拽右侧时间块调整。`;
+      return `AI 已生成今日计划草稿（${blockCount} 个时间块）。可以直接说「确认」，或拖拽右侧时间块调整。`;
     case "confirmed":
       return "今日计划已确认，开工吧！可以随时对我说：「加任务：…」「把 … 顺延到明天」「完成 …」。";
     default:
-      return "早上好！我是你的 AI 规划师。说「规划今天」，我读取你的待办与提醒事项来排今天的计划；也可以问我问题（我会联网搜索），或直接吩咐我记任务。";
+      return "早上好！我是你的 AI 助手。可以问我问题（我会联网搜索），或直接吩咐我记任务、改任务。";
   }
 }
 
@@ -441,19 +441,11 @@ export function TodayChat() {
     chatRun.stopRun();
   };
 
-  const chips = [
-    { label: "规划今天", cmd: "规划今天" },
-    { label: "加任务", cmd: "加任务：" },
-    { label: "重新规划", cmd: "重新规划" },
-  ];
+  const chips = [{ label: "加任务", cmd: "加任务：" }];
 
   const chipClick = (cmd: string) => {
-    if (cmd === "加任务：") {
-      // 预填输入框，让用户补全任务名（避免发送空指令）
-      setInput(cmd);
-    } else {
-      send(cmd);
-    }
+    // 预填输入框，让用户补全任务名（避免发送空指令）
+    setInput(cmd);
   };
 
   const showGreeting = !msgsLoading && (msgs ?? []).length === 0 && !busy;
