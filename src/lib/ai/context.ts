@@ -1,4 +1,4 @@
-// Context collection for the planning agent (design doc §4.1 收集阶段).
+// Context collection for the planning agent (design doc).
 // Reads: calendar events (reminders-cli bridge) + open tasks + inbox + goals.
 
 import type Database from "@tauri-apps/plugin-sql";

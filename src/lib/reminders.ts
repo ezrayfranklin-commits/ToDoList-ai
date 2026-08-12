@@ -1,4 +1,4 @@
-// macOS 提醒事项桥接（M3 系统联动，design doc §2.6）。
+// macOS 提醒事项桥接（M3 系统联动，design doc）。
 // 优先使用社区现成 CLI `remindctl`（Apple Reminders 官方数据，无需 MCP Server，
 // 规避 mcp-server-reminders 的 alpha 质量风险 —— 规划 §7 的降级路径）。
 // 通过 tauri-plugin-shell 拉起子进程；权限未授权时优雅降级。

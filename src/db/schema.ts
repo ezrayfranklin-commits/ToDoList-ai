@@ -1,6 +1,6 @@
 // Drizzle schema — single source of truth for the SQLite database.
 // Tables: tasks / goals / daily_plans / agent_runs / settings
-// (per design doc §2.5)
+// (per design doc)
 
 import { sql } from "drizzle-orm";
 import {

@@ -1,4 +1,4 @@
-// Planning agent: structured daily plan generation (design doc §4.2).
+// Planning agent: structured daily plan generation (design doc).
 // Plan-and-Execute, 确认环节: generation only writes a draft; the UI shows it
 // and the user confirms/edits before `applyPlanToDb` mutates tasks.
 

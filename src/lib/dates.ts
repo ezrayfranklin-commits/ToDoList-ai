@@ -1,4 +1,4 @@
-// Date helpers (date-fns based, design doc §2.3).
+// Date helpers (date-fns based, design doc).
 
 import {
   addDays,

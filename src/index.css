@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ------------------------------------------------------------------ */
-/* TodoList AI — light minimal theme (per design spec in design doc §5)  */
+/* TodoList AI — light minimal theme (per design spec)  */
 /*   background #FAFAFA · cards #FFFFFF · borders #E5E5E5             */
 /*   primary #111111 · accent #4A6CF7 (low-saturation blue)           */
 /* ------------------------------------------------------------------ */

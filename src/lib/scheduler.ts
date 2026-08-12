@@ -1,4 +1,4 @@
-// Daily automation loop (design doc §4.1): cron-parser computes the next
+// Daily automation loop (design doc): cron-parser computes the next
 // occurrence of 08:00 (auto plan) and 21:00 (evening review), then we
 // setTimeout until then. Re-schedules itself after each fire and on
 // settings changes.

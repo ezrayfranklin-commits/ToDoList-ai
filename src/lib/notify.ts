@@ -1,4 +1,4 @@
-// Desktop notifications via tauri-plugin-notification (design doc §2.6).
+// Desktop notifications via tauri-plugin-notification (design doc).
 
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification";
 import { getSetting } from "@/lib/db";

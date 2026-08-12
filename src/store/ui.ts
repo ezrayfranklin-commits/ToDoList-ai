@@ -1,4 +1,4 @@
-// UI state (Zustand, design doc §2.2).
+// UI state (Zustand, design doc).
 
 import { create } from "zustand";
 

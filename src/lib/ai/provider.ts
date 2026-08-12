@@ -1,4 +1,4 @@
-// AI provider factory (Vercel AI SDK, design doc §2.4).
+// AI provider factory (Vercel AI SDK, design doc).
 // One switch between OpenAI-compatible / Anthropic / Ollama (local, privacy mode).
 // The OpenAI slot accepts ANY OpenAI-compatible endpoint (official OpenAI,
 // DeepSeek, Moonshot, Qwen-DashScope, etc.) via a configurable base URL.

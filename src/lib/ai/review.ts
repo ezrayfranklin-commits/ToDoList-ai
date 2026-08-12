@@ -1,4 +1,4 @@
-// Evening review agent (design doc §4.1 晚间复盘):
+// Evening review agent (design doc):
 // summary of the day + auto-carry-over of uncompleted tasks to tomorrow.
 
 import { generateText } from "ai";
@@ -88,7 +88,7 @@ export async function runEveningReview(
     summary = `今天完成了 ${completedRows.length} 项，还有 ${uncompletedRows.length} 项未完成。`;
   }
 
-  // Carry over uncompleted tasks to tomorrow (design doc §4.1 自动顺延)
+  // Carry over uncompleted tasks to tomorrow (design doc)
   let carried = 0;
   if (settings.carryOver) {
     const tomorrow = tomorrowStr();
