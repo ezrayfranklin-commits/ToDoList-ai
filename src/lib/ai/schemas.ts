@@ -88,6 +88,16 @@ export const chatIntentSchema = z.object({
     .describe(
       "给用户的中文回复，一句话说明将执行的操作；general 时直接回答用户的问题",
     ),
+  needsSearch: z
+    .enum(["yes", "no"])
+    .describe(
+      "general 类问题时判断：问题是否需要联网搜索才能回答（时效性信息、外部事实、新闻、价格、资料查询）；规划/待办操作类一律 no；闲聊也 no",
+    ),
+  searchQuery: z
+    .string()
+    .describe(
+      "needsSearch=yes 时填搜索关键词（简洁，适合搜索引擎）；否则填空字符串",
+    ),
 });
 
 export type ChatIntent = z.infer<typeof chatIntentSchema>;

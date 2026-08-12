@@ -35,8 +35,10 @@ const CHAT_SYSTEM = `你是 TodoList AI 的对话助手，用户通过自然语�
 - "完成xxx"/"xxx做完了" → complete
 - "把xxx顺延到明天"/"改到后天"/"推迟xxx" → reschedule（target 填 今天/明天/后天/YYYY-MM-DD）
 - "删掉xxx"/"删除xxx" → delete
-- 其他对话 → general，reply 直接回答
-taskTitle 必须提取用户提到的具体任务名，找不到就填空字符串。reply 用中文，简短自然。`;
+- 其他对话 → general，reply 直接回答；若问题需要联网才能回答
+  （时效信息/新闻/价格/外部事实等），needsSearch=yes 并给出简洁的 searchQuery
+- taskTitle 必须提取用户提到的具体任务名，找不到就填空字符串。
+reply 用中文，简短自然。`;
 
 /** Keyword fallback for when the model cannot be reached. */
 function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
@@ -48,6 +50,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       action: "replan",
       taskTitle: "",
       target: "",
+      needsSearch: "no",
+      searchQuery: "",
       reply: "好的，我重新生成一份今日计划草稿。",
     };
   }
@@ -57,6 +61,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       action,
       taskTitle: "",
       target: "",
+      needsSearch: "no",
+      searchQuery: "",
       reply: "好的，我来为你生成今日计划。",
     };
   }
@@ -66,6 +72,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       action: "add_task",
       taskTitle: addMatch[1].trim(),
       target: "",
+      needsSearch: "no",
+      searchQuery: "",
       reply: `好的，把「${addMatch[1].trim()}」记下来。`,
     };
   }
@@ -75,6 +83,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       action: "complete",
       taskTitle: doneMatch[1].trim(),
       target: "",
+      needsSearch: "no",
+      searchQuery: "",
       reply: "收到，帮你标记完成。",
     };
   }
@@ -84,6 +94,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       action: "reschedule",
       taskTitle: deferMatch[1].trim(),
       target: deferMatch[2],
+      needsSearch: "no",
+      searchQuery: "",
       reply: "好的，帮你改期。",
     };
   }
@@ -93,6 +105,8 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
       action: "delete",
       taskTitle: delMatch[1].trim(),
       target: "",
+      needsSearch: "no",
+      searchQuery: "",
       reply: "好的，帮你删除。",
     };
   }
@@ -100,9 +114,20 @@ function fallbackIntent(message: string, ctx: ChatContext): ChatIntent {
     action: "general",
     taskTitle: "",
     target: "",
+    // 模型不可用时, 若消息像信息查询类问题, 仍可触发搜索
+    ...(isSearchLike(clean)
+      ? { needsSearch: "yes" as const, searchQuery: clean.slice(0, 80) }
+      : { needsSearch: "no" as const, searchQuery: "" }),
     reply:
-      "我可以帮你：规划今天、加任务（如「加任务：买咖啡」）、标记完成、顺延到明天、删除任务。试试对我说「规划今天」？",
+      "我可以帮你：规划今天、加任务（如「加任务：买咖啡」）、标记完成、顺延到明天、删除任务，或搜索资料。试试对我说「规划今天」？",
   };
+}
+
+/** 粗判消息是否像信息查询（模型不可用时的兜底触发搜索）。 */
+function isSearchLike(text: string): boolean {
+  return /(查|搜|找|是什么|怎么样|多少钱|价格|新闻|最新|推荐|对比|教程|用法|怎么用|天气|行情)/.test(
+    text,
+  );
 }
 
 export async function runChatAgent(
@@ -132,16 +157,23 @@ export async function runChatAgent(
   const prompt = `用户消息：${message}${historyBlock}\n\n当前状态：${JSON.stringify(statusBrief)}\n\n请判断意图并回复。`;
   try {
     let intent: ChatIntent;
+    // 30s 整体超时：模型挂起/网关卡住时保证必有回复（fallback），不白屏不静默
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("意图识别超时(30s)")), 30_000),
+    );
     if (settings.provider === "ollama" || settings.provider === "openai") {
       // Third-party OpenAI-compatible gateways (opencode.ai etc.) need the
       // plain /chat/completions generator (see lib/ai/ollama.ts header).
-      intent = await generateStructured({
-        settings,
-        system: CHAT_SYSTEM,
-        prompt,
-        schema: chatIntentSchema,
-        temperature: 0.3,
-      });
+      intent = await Promise.race([
+        generateStructured({
+          settings,
+          system: CHAT_SYSTEM,
+          prompt,
+          schema: chatIntentSchema,
+          temperature: 0.3,
+        }),
+        timeout,
+      ]);
     } else {
       const { object } = await generateObject({
         model: getModel(settings),

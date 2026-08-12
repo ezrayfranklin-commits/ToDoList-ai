@@ -27,6 +27,8 @@ import {
 } from "@/hooks/queries";
 import { runPlanning } from "@/lib/agent";
 import { runChatAgent, findTask, parseTarget, type ChatContext } from "@/lib/ai/chat";
+import { webSearch } from "@/lib/ai/search";
+import { generatePlainText } from "@/lib/ai/ollama";
 import { formatDbTime, todayStr, tomorrowStr } from "@/lib/dates";
 import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
@@ -39,9 +41,17 @@ function greeting(planStatus: ChatContext["planStatus"], blockCount: number): st
     case "confirmed":
       return "今日计划已确认，开工吧！可以随时对我说：「加任务：…」「把 … 顺延到明天」「完成 …」。";
     default:
-      return "早上好！我是你的 AI 规划师。说「规划今天」，我读取你的待办与提醒事项来排今天的计划；也可以直接吩咐我记任务。";
+      return "早上好！我是你的 AI 规划师。说「规划今天」，我读取你的待办与提醒事项来排今天的计划；也可以问我问题（我会联网搜索），或直接吩咐我记任务。";
   }
 }
+
+/** 基于搜索结果的回答生成（搜索工具后的第二阶段, 引用来源）。 */
+const SEARCH_ANSWER_SYSTEM = `你是 TodoList AI 的 AI 助手。用户问了一个需要联网的问题，以下是搜索到的资料。
+请用中文回答用户问题：
+1. 基于搜索结果作答，不要编造；
+2. 在相关句子后标注来源序号，如 [1]；
+3. 回答末尾列出「来源：」清单（序号 + 标题 + URL），最多 5 条；
+4. 如果搜索结果不足以回答，明确说明并给出部分相关信息。`;
 
 export function TodayChat() {
   const today = todayStr();
@@ -152,9 +162,34 @@ export function TodayChat() {
         invalidateAll();
         return `已删除「${t.title}」。`;
       }
-      case "general":
-      default:
+      case "general": {
+        // pi 式工具调用: 模型判断需要搜索 → 执行 DuckDuckGo → 结果交给模型回答
+        if (intent.needsSearch === "yes" && intent.searchQuery) {
+          const { results, engine, error } = await webSearch(intent.searchQuery, 5);
+          if (results.length > 0) {
+            const answer = await generatePlainText({
+              settings,
+              system: SEARCH_ANSWER_SYSTEM,
+              prompt:
+                `用户问题：${raw}\n\n搜索结果（${engine}）：\n` +
+                results
+                  .map(
+                    (r, i) =>
+                      `${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${r.snippet}`,
+                  )
+                  .join("\n"),
+              temperature: 0.4,
+              maxOutputTokens: 1024,
+            });
+            return answer.trim();
+          }
+          return (
+            `搜索「${intent.searchQuery}」没有结果${error ? `（${error.split("\n")[1] ?? ""}）` : ""}。` +
+            "换个说法试试，或告诉我具体想了解什么。"
+          );
+        }
         return intent.reply || "收到。";
+      }
     }
   };
 
