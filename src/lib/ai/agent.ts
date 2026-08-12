@@ -1,11 +1,16 @@
-// pi-style agent loop (GUI 套壳的本地 CLI 智能体, 规划 v0.7).
+// Hermes-style agent loop (TS 移植版, 规划 v0.11).
 //
-// 与 pi 的 CLI 行为对齐：模型自主决定调用哪些工具、调用几次、是否搜索，
-// 多轮循环直到给出最终回答。协议为 /chat/completions + tools（Ollama 与
-// 第三方 OpenAI 兼容网关通用）。工具执行由调用方注入（前端 mutations），
-// 本模块只负责「思考 → 工具调用 → 观察结果 → 继续」的循环。
+// 框架逻辑移植自 open-source agent framework (github.com/open-source agent framework,
+// MIT) 的核心 turn 循环设计——纯 TS 实现, 零安装、跑在应用内:
+//   - 多轮工具调用循环 (conversation_loop)
+//   - 错误分类 FailoverReason (error_classifier): RegionError/鉴权不可重试,
+//     5xx/429/网络抖动可重试 (jittered backoff, 每次尝试一次性守卫)
+//   - 工具调用参数修复 _repair_tool_call_arguments (message_sanitization 思路)
+//   - 输出清洗 sanitize (防非 ASCII/控制字符破坏渲染)
+//   - 用户中断 estop: signal.abort 立即结束本轮, 标记中断消息
 //
-// 不限制工具使用：提示词不规定调用顺序/次数，工具集全量暴露。
+// 本项目的提示词 (DEFAULT_SYSTEM)、工具集 (tools)、搜索 Skill (search)
+// 与数据层全部保持不变, 仅 agent 循环机制更换。
 
 import { endpoint, friendlyHttpError, type ChatMessage } from "@/lib/ai/ollama";
 import type { AISettings } from "@/lib/types";
@@ -69,6 +74,88 @@ async function defaultFetch(input: RequestInfo | URL, init?: RequestInit): Promi
   return tauriFetchFn(input, init);
 }
 
+// ---------------------------------------------------------------------------
+// Hermes 机制 1: 错误分类 (error_classifier.FailoverReason 移植)
+// ---------------------------------------------------------------------------
+
+type FailoverReason =
+  | "retryable" // 网络抖动 / 5xx / 429: 退避重试
+  | "auth" // 401/403: 不重试, 提示检查 Key
+  | "region" // RegionError: 不重试, 提示开通
+  | "fatal"; // 其他: 不重试
+
+function classifyApiError(status: number, body: string): FailoverReason {
+  if (status === 401 || status === 403) {
+    return body.includes("RegionError") ? "region" : "auth";
+  }
+  if (status === 429 || status >= 500 || status === 0) return "retryable";
+  return "fatal";
+}
+
+/** jittered backoff (retry_utils.jittered_backoff 思路): base*2^n ± 30% */
+function jitteredBackoffMs(attempt: number): number {
+  const base = 800 * 2 ** attempt;
+  return Math.round(base * (0.7 + Math.random() * 0.6));
+}
+
+// ---------------------------------------------------------------------------
+// Hermes 机制 2: 工具调用参数修复 (message_sanitization 思路)
+// ---------------------------------------------------------------------------
+
+/** 尝试修复模型输出的坏 JSON 参数: 去 code fence / 截取 {} 区间 / 去尾逗号。 */
+export function repairToolCallArguments(raw: string): string | null {
+  let s = raw.trim();
+  if (!s) return null;
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  s = s.slice(start, end + 1);
+  // 去尾逗号（对象/数组最后一个元素后的 ,）
+  s = s.replace(/,\s*([}\]])/g, "$1");
+  try {
+    JSON.parse(s);
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function parseArgs(raw: string | undefined): Record<string, unknown> | null {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  } catch {
+    const repaired = repairToolCallArguments(raw ?? "");
+    if (repaired !== null) {
+      try {
+        const v = JSON.parse(repaired);
+        return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Hermes 机制 3: 输出清洗 (message_sanitization 思路)
+// ---------------------------------------------------------------------------
+
+/** 清洗模型输出: 去除 null 字符/控制字符, 防渲染与存储问题。 */
+export function sanitizeText(text: string): string {
+  return text
+    .replace(/\u0000/g, "")
+    .replace(/[\u0001-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+    .trim();
+}
+
+// ---------------------------------------------------------------------------
+// 单次模型调用 (带 带守卫的重试: 一次性守卫 + jittered backoff)
+// ---------------------------------------------------------------------------
+
 interface ChatOnceResult {
   message: ChatMessage;
 }
@@ -82,41 +169,64 @@ async function chatOnce(
   fetchImpl: typeof fetch,
   signal?: AbortSignal,
 ): Promise<ChatOnceResult> {
-  const res = await fetchImpl(endpoint(settings), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: settings.model,
-      messages,
-      tools,
-      temperature,
-      max_tokens: maxTokens,
-      stream: false,
-    }),
-    signal,
-  });
-  if (!res.ok) {
+  // 重试守卫: 每个错误分类只重试一次（TurnRetryState 思路）
+  let retryableAttempted = false;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; ; attempt++) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    let res: Response;
+    try {
+      res = await fetchImpl(endpoint(settings), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          messages,
+          tools,
+          temperature,
+          max_tokens: maxTokens,
+          stream: false,
+        }),
+        signal,
+      });
+    } catch (e) {
+      // 网络层错误: 用户停止直接抛, 否则按可重试处理
+      if (signal?.aborted) throw e;
+      lastError = e;
+      if (!retryableAttempted) {
+        retryableAttempted = true;
+        await new Promise((r) => setTimeout(r, jitteredBackoffMs(attempt)));
+        continue;
+      }
+      throw new Error(`网络请求失败: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    if (res.ok) {
+      const data = (await res.json()) as { choices?: Array<{ message?: ChatMessage }> };
+      const message = data.choices?.[0]?.message;
+      if (!message) throw new Error("模型返回为空");
+      return { message };
+    }
     const body = await res.text();
+    const reason = classifyApiError(res.status, body);
+    if (reason === "retryable" && !retryableAttempted) {
+      retryableAttempted = true;
+      await new Promise((r) => setTimeout(r, jitteredBackoffMs(attempt)));
+      continue;
+    }
+    // auth / region / fatal: 不重试, 抛出带可操作提示的错误
     throw friendlyHttpError(res.status, body, settings.model);
   }
-  const data = (await res.json()) as { choices?: Array<{ message?: ChatMessage }> };
-  const message = data.choices?.[0]?.message;
-  if (!message) throw new Error("模型返回为空");
-  return { message };
 }
 
-function parseArgs(raw: string | undefined): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const v = JSON.parse(raw);
-    return v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
+// ---------------------------------------------------------------------------
+// 主循环 (conversation_loop 移植): 多轮工具调用 → 最终回答
+// ---------------------------------------------------------------------------
 
 export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
   const {
@@ -153,12 +263,12 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
 
     // 模型不再调用工具 → 这是最终回答
     if (calls.length === 0) {
-      const reply = (message.content ?? "").trim();
+      const reply = sanitizeText(message.content ?? "");
       if (!reply) throw new Error("模型返回为空");
       return { reply, turns, toolCalls };
     }
 
-    // 执行本轮所有工具调用，结果作为 tool 消息回填
+    // 执行本轮所有工具调用, 结果作为 tool 消息回填
     messages.push({ role: "assistant", content: message.content ?? null, tool_calls: message.tool_calls });
     for (const call of calls) {
       toolCalls++;
@@ -167,10 +277,18 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
       if (!tool) {
         out = `未知工具：${call.function.name}`;
       } else {
-        try {
-          out = await tool.execute(parseArgs(call.function.arguments));
-        } catch (e) {
-          out = `工具执行失败：${e instanceof Error ? e.message : String(e)}`;
+        const args = parseArgs(call.function.arguments);
+        if (args === null) {
+          // 参数损坏且无法修复: 反馈模型重新调用（参数修复失败路径）
+          out = `工具 ${call.function.name} 的参数不是合法 JSON（原始: ${String(
+            call.function.arguments,
+          ).slice(0, 120)}），请重新调用该工具并给出合法 JSON 参数。`;
+        } else {
+          try {
+            out = await tool.execute(args);
+          } catch (e) {
+            out = `工具执行失败：${e instanceof Error ? e.message : String(e)}`;
+          }
         }
       }
       messages.push({ role: "tool", tool_call_id: call.id, content: out });
