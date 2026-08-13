@@ -10,6 +10,7 @@ import { todayStr } from "@/lib/dates";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { t } from "@/lib/i18n";
+import { useSettings } from "@/store/settings";
 
 const NAV: Array<{ view: View; label: () => string; icon: typeof Inbox }> = [
   { view: "today", label: () => t("nav.today"), icon: CalendarCheck2 },
@@ -20,6 +21,7 @@ const NAV: Array<{ view: View; label: () => string; icon: typeof Inbox }> = [
 
 export function Sidebar() {
   const { view, setView, currentConversationId, setCurrentConversation } = useUI();
+  const settings = useSettings();
   const today = todayStr();
   const { data: plan } = usePlan(today);
   const { data: todayTasks } = useTasksByDate(today);
@@ -62,6 +64,30 @@ export function Sidebar() {
           <div className="truncate text-[13px] font-semibold leading-tight">TodoList AI</div>
           <div className="text-[11px] text-muted-foreground">{t("sidebar.subtitle")}</div>
         </div>
+      </div>
+
+      {/* 界面语言切换（首页直达，无需进设置） */}
+      <div className="mb-3 flex items-center gap-1.5 px-2">
+        <button
+          onClick={() => settings.setLang("zh")}
+          className={`flex-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors duration-200 ${
+            settings.lang === "zh"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          中文
+        </button>
+        <button
+          onClick={() => settings.setLang("en")}
+          className={`flex-1 rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors duration-200 ${
+            settings.lang === "en"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
+        >
+          English
+        </button>
       </div>
 
       <button
