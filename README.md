@@ -119,3 +119,7 @@ node tests/run-agent-crud.mjs
 ```
 
 覆盖增、查、改、完成、删、防误删、防谎报、批量删、联网搜索，共 10 个用例。
+
+## 社区
+
+感谢 [LINUX DO](https://linux.do/) 社区的支持与交流。
