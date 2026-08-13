@@ -8,8 +8,11 @@ import { generatePlainText } from "@/lib/ai/ollama";
 import { getPlanByDate, logRun } from "@/lib/ai/plan";
 import { tomorrowStr } from "@/lib/dates";
 import type { AISettings, DailyPlan } from "@/lib/types";
+import { lang } from "@/lib/i18n";
 
-const REVIEW_SYSTEM = `你是一名复盘教练。输入是用户某天的计划与执行情况 JSON。
+const REVIEW_SYSTEM = (): string =>
+  (lang() === "en" ? "The user's UI is in English. Write the review in English.\n\n" : "") +
+  `你是一名复盘教练。输入是用户某天的计划与执行情况 JSON。
 输出一段简短的中文复盘（Markdown 格式，150 字以内）：
 - 完成情况一句话总结
 - 亮点 1 条（如有）
@@ -67,7 +70,7 @@ export async function runEveningReview(
     if (settings.provider === "anthropic") {
       const res = await generateText({
         model: getModel(settings),
-        system: REVIEW_SYSTEM,
+        system: REVIEW_SYSTEM(),
         prompt: `复盘输入 JSON：\n${JSON.stringify(input, null, 2)}`,
         temperature: 0.5,
       });
@@ -76,7 +79,7 @@ export async function runEveningReview(
       // OpenAI-compatible endpoints (incl. third-party gateways)
       text = await generatePlainText({
         settings,
-        system: REVIEW_SYSTEM,
+        system: REVIEW_SYSTEM(),
         prompt: `复盘输入 JSON：\n${JSON.stringify(input, null, 2)}`,
         temperature: 0.5,
       });
@@ -85,7 +88,9 @@ export async function runEveningReview(
     ok = true;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
-    summary = `今天完成了 ${completedRows.length} 项，还有 ${uncompletedRows.length} 项未完成。`;
+    summary = lang() === "en"
+      ? `Completed ${completedRows.length} today, ${uncompletedRows.length} still open.`
+      : `今天完成了 ${completedRows.length} 项，还有 ${uncompletedRows.length} 项未完成。`;
   }
 
   // Carry over uncompleted tasks to tomorrow (design doc)

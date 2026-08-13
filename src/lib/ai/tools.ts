@@ -13,6 +13,7 @@ import {
 import { findOneTask, findTaskCandidates, verifyTaskGone } from "@/lib/calendar";
 import type { DailyPlan, Priority, Task } from "@/lib/types";
 import type { PlanResult } from "@/lib/agent";
+import { t } from "@/lib/i18n";
 
 export interface ToolDeps {
   today: string;
@@ -141,7 +142,7 @@ export function buildAgentTools(deps: ToolDeps): AgentTool[] {
             start,
             end: end ?? addMinutesToHHmm(start, 60),
             priority: "medium",
-            effort: "1小时",
+            effort: t("effort.1h"),
             taskId,
             done: false,
           });

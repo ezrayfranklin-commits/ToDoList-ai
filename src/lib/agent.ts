@@ -13,9 +13,10 @@ import { runEveningReview } from "@/lib/ai/review";
 import { notify } from "@/lib/notify";
 import { todayStr } from "@/lib/dates";
 import type { AISettings, DailyPlan } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export async function loadAISettings(): Promise<AISettings> {
-  const [provider, model, apiKey, baseUrl, autoPlan, notifications, carryOver, autoReview] =
+  const [provider, model, apiKey, baseUrl, autoPlan, notifications, carryOver, autoReview, lang] =
     await Promise.all([
       getSetting<AISettings["provider"]>("ai.provider", "ollama"),
       getSetting<string>("ai.model", "qwen2.5:7b"),
@@ -25,6 +26,7 @@ export async function loadAISettings(): Promise<AISettings> {
       getSetting<boolean>("notifications", true),
       getSetting<boolean>("carryOver", true),
       getSetting<boolean>("autoReview", true),
+      getSetting<"zh" | "en">("ui.lang", "zh"),
     ]);
   return {
     provider,
@@ -35,6 +37,7 @@ export async function loadAISettings(): Promise<AISettings> {
     notifications,
     carryOver,
     autoReview,
+    lang,
   };
 }
 
@@ -59,15 +62,15 @@ export async function runPlanning(
     const plan = await savePlanDraft(dateStr, output, settings.model, ctx);
     if (!silent) {
       await notify(
-        "今日计划已生成 ✨",
-        `${output.timeBlocks.length} 个时间块，请确认后开始执行`,
+        t("agent.planDone"),
+        t("agent.planDoneDetail", { count: output.timeBlocks.length }),
       );
     }
     return { ok: true, plan };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!silent) {
-      await notify("规划失败", msg.slice(0, 200));
+      await notify(t("agent.planFailed"), msg.slice(0, 200));
     }
     return { ok: false, error: msg };
   }
@@ -83,8 +86,10 @@ export async function runReview(
     const { summary, carried } = await runEveningReview(dateStr, settings);
     if (!silent) {
       await notify(
-        "晚间复盘完成 🌙",
-        `完成度已记录${carried > 0 ? `，${carried} 项任务顺延至明日` : ""}`,
+        t("agent.reviewDone"),
+        t("agent.reviewDoneDetail", {
+          carried: carried > 0 ? t("agent.reviewCarried", { count: carried }) : "",
+        }),
       );
     }
     return { ok: true, summary, carried };

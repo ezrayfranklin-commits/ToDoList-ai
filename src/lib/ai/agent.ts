@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { weekdayCN } from "@/lib/dates";
 import { logToolCall } from "@/lib/calendar";
 import type { AISettings } from "@/lib/types";
+import { lang } from "@/lib/i18n";
 
 /** 一个可调用工具：元数据（扁平 JSON Schema，Ollama 兼容）+ 执行函数。 */
 export interface AgentTool {
@@ -49,7 +50,9 @@ export interface AgentLoopResult {
   toolCalls: number;
 }
 
-const DEFAULT_SYSTEM = `你是 TodoList AI 内置的本地智能体，运行在用户的 MacBook 上（相当于一个本地 CLI 的对话界面）。
+const DEFAULT_SYSTEM = (): string =>
+  (lang() === "en" ? "The user's UI is in English. Always reply in English.\n\n" : "") +
+  `你是 TodoList AI 内置的本地智能体，运行在用户的 MacBook 上（相当于一个本地 CLI 的对话界面）。
 你可以自主使用以下工具来帮助用户：规划今日计划、添加任务、标记完成、改期/顺延、删除任务、联网搜索（DuckDuckGo）。
 规则：
 - 根据用户意图自主决定调用哪些工具、调用几次、是否先搜索；不受任何固定流程限制。

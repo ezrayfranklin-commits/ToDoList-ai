@@ -10,6 +10,7 @@ import { getModel } from "@/lib/ai/provider";
 import { generateStructured } from "@/lib/ai/ollama";
 import { chatIntentSchema, type ChatIntent } from "@/lib/ai/schemas";
 import { logRun } from "@/lib/ai/plan";
+import { lang } from "@/lib/i18n";
 import { todayStr, tomorrowStr, toDateStr, weekdayCN } from "@/lib/dates";
 import { addDays, parseISO, startOfDay } from "date-fns";
 import type { AISettings, Task } from "@/lib/types";
@@ -28,7 +29,9 @@ export interface ChatHistoryItem {
   content: string;
 }
 
-const CHAT_SYSTEM = `你是 TodoList AI 的对话助手，用户通过自然语言指挥待办应用。
+const CHAT_SYSTEM = (): string =>
+  (lang() === "en" ? "The user's UI is in English. Always reply in English.\n\n" : "") +
+  `你是 TodoList AI 的对话助手，用户通过自然语言指挥待办应用。
 判断用户意图并输出结构化结果：
 - "规划今天"/"重新规划" → plan 或 replan（已有计划则 replan）
 - "加任务：xxx"/"添加xxx"/"记一下xxx" → add_task
@@ -209,7 +212,7 @@ export async function runChatAgent(
       intent = await Promise.race([
         generateStructured({
           settings,
-          system: CHAT_SYSTEM,
+          system: CHAT_SYSTEM(),
           prompt,
           schema: chatIntentSchema,
           temperature: 0.3,
@@ -220,7 +223,7 @@ export async function runChatAgent(
       const { object } = await generateObject({
         model: getModel(settings),
         schema: chatIntentSchema,
-        system: CHAT_SYSTEM,
+        system: CHAT_SYSTEM(),
         prompt,
         temperature: 0.3,
       });
