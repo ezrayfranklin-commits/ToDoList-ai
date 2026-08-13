@@ -37,6 +37,7 @@ The settings page lets you switch AI providers, paste your own API key, or point
 - **Execution and tracking**. Check things off, watch the progress bar
 - **Evening review**. At 21:00 it summarizes what got done and carries unfinished tasks forward
 - **Web search**. The AI searches DuckDuckGo when answering, falling back to Google / Bing
+- **Bilingual UI**. Toggle Chinese / English in Settings; date formats and AI replies follow the UI language
 - **Local-first**. SQLite storage, Ollama privacy mode, nothing leaves the machine unless you configure a cloud provider
 
 ## Getting started
