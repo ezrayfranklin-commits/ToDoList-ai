@@ -3,7 +3,6 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { zhCN } from "date-fns/locale";
 import {
   Bot,
   Cable,
@@ -11,6 +10,7 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   Clock,
+  Languages,
   Loader2,
   Plus,
   Target,
@@ -40,9 +40,10 @@ import {
 } from "@/components/ui/command";
 import { toast } from "sonner";
 import { useSettings } from "@/store/settings";
-import { PROVIDERS, pingModel, type ProviderId } from "@/lib/ai/provider";
+import { PROVIDERS, pingModel, providerLabelT, providerHintT, type ProviderId } from "@/lib/ai/provider";
 import { nextRuns } from "@/lib/scheduler";
 import { useCreateGoal, useDeleteGoal, useGoals } from "@/hooks/queries";
+import { t, dateLocale } from "@/lib/i18n";
 
 /**
  * Model picker: searchable preset list + free-text custom model names
@@ -72,14 +73,14 @@ function ModelCombobox({
           aria-expanded={open}
           className="w-full justify-between font-normal"
         >
-          <span className="truncate">{value || "选择或输入模型名"}</span>
+          <span className="truncate">{value || t("settings.selectModel")}</span>
           <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput
-            placeholder="搜索预设，或直接输入自定义模型名…"
+            placeholder={t("settings.searchModel")}
             value={q}
             onValueChange={setQ}
           />
@@ -106,11 +107,11 @@ function ModelCombobox({
                 }}
               >
                 <Plus className="h-3.5 w-3.5" />
-                使用自定义模型：{q.trim()}
+                {t("settings.customModel", { name: q.trim() })}
               </CommandItem>
             )}
             {filtered.length === 0 && !custom && (
-              <CommandEmpty>没有匹配的模型</CommandEmpty>
+              <CommandEmpty>{t("settings.noModel")}</CommandEmpty>
             )}
           </CommandList>
         </Command>
@@ -139,12 +140,12 @@ export function SettingsPage() {
   };
 
   const addGoal = async () => {
-    const t = newGoal.trim();
-    if (!t) return;
-    await createGoal.mutateAsync({ title: t, targetDate: newGoalDate || undefined });
+    const trimmed = newGoal.trim();
+    if (!trimmed) return;
+    await createGoal.mutateAsync({ title: trimmed, targetDate: newGoalDate || undefined });
     setNewGoal("");
     setNewGoalDate("");
-    toast.success("已添加长期目标");
+    toast.success(t("settings.goalAdded"));
   };
 
   const provider = PROVIDERS.find((p) => p.id === settings.provider) ?? PROVIDERS[2];
@@ -167,9 +168,9 @@ export function SettingsPage() {
   return (
     <div className="mx-auto h-full max-w-2xl overflow-y-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-xl font-bold tracking-tight">设置</h1>
+        <h1 className="text-xl font-bold tracking-tight">{t("settings.title")}</h1>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          本地优先：数据存于本机 SQLite；模型可选云端或本地 Ollama（隐私模式）
+          {t("settings.subtitle")}
         </p>
       </div>
 
@@ -178,13 +179,13 @@ export function SettingsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-[14px]">
-              <Bot className="h-4 w-4" /> AI 模型
+              <Bot className="h-4 w-4" /> {t("settings.ai")}
             </CardTitle>
-            <CardDescription>规划与复盘智能体使用的模型</CardDescription>
+            <CardDescription>{t("settings.aiDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label>提供商</Label>
+              <Label>{t("settings.provider")}</Label>
               <Select value={settings.provider} onValueChange={switchProvider}>
                 <SelectTrigger>
                   <SelectValue />
@@ -192,16 +193,16 @@ export function SettingsPage() {
                 <SelectContent>
                   {PROVIDERS.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
-                      {p.label}
+                      {providerLabelT(p.id)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground">{provider.hint}</p>
+              <p className="text-[11px] text-muted-foreground">{providerHintT(settings.provider)}</p>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label>模型（可搜索或自定义输入）</Label>
+              <Label>{t("settings.model")}</Label>
               <ModelCombobox
                 value={settings.model}
                 models={provider.models}
@@ -212,7 +213,7 @@ export function SettingsPage() {
             {settings.provider !== "anthropic" && (
               <div className="flex flex-col gap-1.5">
                 <Label>
-                  {settings.provider === "ollama" ? "Ollama 地址" : "Base URL（OpenAI 兼容端点）"}
+                  {settings.provider === "ollama" ? t("settings.ollamaUrl") : t("settings.baseUrl")}
                 </Label>
                 <Input
                   value={settings.baseUrl}
@@ -225,15 +226,12 @@ export function SettingsPage() {
                 />
                 {settings.provider === "openai" && (
                   <p className="text-[11px] text-muted-foreground">
-                    官方 OpenAI 填 https://api.openai.com/v1；DeepSeek 填
-                    https://api.deepseek.com；其他 OpenAI 兼容服务商同理（{provider.hint}
-                    ）。模型名同步改为服务商对应的名称，如 deepseek-chat。
+                    {t("settings.openaiUrlHint")}
                   </p>
                 )}
                 {settings.provider === "ollama" && (
                   <p className="text-[11px] text-muted-foreground">
-                    需要先运行 <code className="rounded bg-secondary px-1">ollama serve</code>
-                    {" "}并拉取模型
+                    {t("settings.ollamaUrlHint")} <code className="rounded bg-secondary px-1">ollama serve</code>
                   </p>
                 )}
               </div>
@@ -241,7 +239,7 @@ export function SettingsPage() {
 
             {settings.provider !== "ollama" && (
               <div className="flex flex-col gap-1.5">
-                <Label>API Key（仅存本机 SQLite）</Label>
+                <Label>{t("settings.apiKey")}</Label>
                 <Input
                   type="password"
                   value={settings.apiKey}
@@ -254,7 +252,7 @@ export function SettingsPage() {
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={test} disabled={testing}>
                 {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cable className="h-3.5 w-3.5" />}
-                测试连接
+                {t("settings.test")}
               </Button>
               {testResult && (
                 <span
@@ -278,16 +276,16 @@ export function SettingsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-[14px]">
-              <Clock className="h-4 w-4" /> 自动化
+              <Clock className="h-4 w-4" /> {t("settings.automation")}
             </CardTitle>
-            <CardDescription>每日 08:00 自动规划，21:00 晚间复盘（cron-parser 定时）</CardDescription>
+            <CardDescription>{t("settings.automationDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[13px] font-medium">每日自动规划</div>
+                <div className="text-[13px] font-medium">{t("settings.autoPlan")}</div>
                 <div className="text-[11px] text-muted-foreground">
-                  下次运行：{runs[0] ? format(runs[0].at, "M月d日 HH:mm", { locale: zhCN }) : "—"}
+                  {t("settings.nextRun", { time: runs[0] ? format(runs[0].at, "MMM d HH:mm", { locale: dateLocale() }) : "—" })}
                 </div>
               </div>
               <Switch
@@ -298,9 +296,9 @@ export function SettingsPage() {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[13px] font-medium">晚间自动复盘</div>
+                <div className="text-[13px] font-medium">{t("settings.autoReview")}</div>
                 <div className="text-[11px] text-muted-foreground">
-                  下次运行：{runs[1] ? format(runs[1].at, "M月d日 HH:mm", { locale: zhCN }) : "—"}
+                  {t("settings.nextRun", { time: runs[1] ? format(runs[1].at, "MMM d HH:mm", { locale: dateLocale() }) : "—" })}
                 </div>
               </div>
               <Switch checked={settings.autoReview} onCheckedChange={(v) => settings.update({ autoReview: v })} />
@@ -308,8 +306,8 @@ export function SettingsPage() {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[13px] font-medium">桌面通知</div>
-                <div className="text-[11px] text-muted-foreground">计划生成与复盘完成时提醒</div>
+                <div className="text-[13px] font-medium">{t("settings.notifications")}</div>
+                <div className="text-[11px] text-muted-foreground">{t("settings.notificationsDesc")}</div>
               </div>
               <Switch
                 checked={settings.notifications}
@@ -319,8 +317,8 @@ export function SettingsPage() {
             <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[13px] font-medium">未完成自动顺延</div>
-                <div className="text-[11px] text-muted-foreground">复盘时将未完成任务移至明日</div>
+                <div className="text-[13px] font-medium">{t("settings.carryOver")}</div>
+                <div className="text-[11px] text-muted-foreground">{t("settings.carryOverDesc")}</div>
               </div>
               <Switch
                 checked={settings.carryOver}
@@ -330,34 +328,61 @@ export function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Interface language */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-[14px]">
+              <Languages className="h-4 w-4" /> {t("settings.language")}
+            </CardTitle>
+            <CardDescription>{t("settings.languageDesc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2">
+              <Button
+                variant={settings.lang === "zh" ? "default" : "outline"}
+                size="sm"
+                onClick={() => settings.setLang("zh")}
+              >
+                {t("settings.langZh")}
+              </Button>
+              <Button
+                variant={settings.lang === "en" ? "default" : "outline"}
+                size="sm"
+                onClick={() => settings.setLang("en")}
+              >
+                {t("settings.langEn")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* macOS bridge (开发中, 暂不启用) */}
         <Card className="opacity-60 grayscale select-none">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-[14px]">
-              <Cable className="h-4 w-4" /> macOS 联动
+              <Cable className="h-4 w-4" /> {t("settings.macBridge")}
               <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                开发中
+                {t("settings.macBridgeBadge")}
               </span>
             </CardTitle>
-            <CardDescription>桥接 Apple 提醒事项/日历（规划 §2.6）</CardDescription>
+            <CardDescription>{t("settings.macBridgeDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <p className="text-[12px] leading-relaxed text-muted-foreground">
-              该功能正在开发中，暂不可用。开发完成后，规划智能体将能读取今日提醒/日历会议，
-              自动避开会议时间排任务。
+              {t("settings.macBridgeBody")}
             </p>
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="outline" disabled>
                 <Cable className="mr-1 h-3 w-3" />
-                授权/重新检测
+                {t("settings.macBridgeAuth")}
               </Button>
               <Button size="sm" variant="outline" disabled>
                 <Target className="mr-1 h-3 w-3" />
-                打开系统设置
+                {t("settings.macBridgeSettings")}
               </Button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-              敬请期待，后端能力已保留。
+              {t("settings.macBridgeComing")}
             </p>
           </CardContent>
         </Card>
@@ -366,16 +391,16 @@ export function SettingsPage() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-[14px]">
-              <Target className="h-4 w-4" /> 长期目标
+              <Target className="h-4 w-4" /> {t("settings.goals")}
             </CardTitle>
-            <CardDescription>规划智能体会在排期时参考这些目标</CardDescription>
+            <CardDescription>{t("settings.goalsDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex gap-2">
               <Input
                 value={newGoal}
                 onChange={(e) => setNewGoal(e.target.value)}
-                placeholder="例如：12 月完成英语考试"
+                placeholder={t("settings.goalPlaceholder")}
               />
               <Input
                 type="date"
@@ -388,7 +413,7 @@ export function SettingsPage() {
               </Button>
             </div>
             {(goals ?? []).length === 0 ? (
-              <p className="py-2 text-center text-[12px] text-muted-foreground">还没有长期目标</p>
+              <p className="py-2 text-center text-[12px] text-muted-foreground">{t("settings.noGoals")}</p>
             ) : (
               <div className="flex flex-col divide-y divide-border">
                 {(goals ?? []).map((g) => (
@@ -397,7 +422,7 @@ export function SettingsPage() {
                       <div className="truncate text-[13px]">{g.title}</div>
                       {g.targetDate && (
                         <div className="text-[11px] text-muted-foreground">
-                          截止 {format(new Date(g.targetDate + "T00:00:00"), "yyyy-MM-dd")}
+                          {t("settings.goalDeadline", { date: format(new Date(g.targetDate + "T00:00:00"), "yyyy-MM-dd") })}
                         </div>
                       )}
                     </div>
@@ -417,7 +442,7 @@ export function SettingsPage() {
         </Card>
 
         <p className="pb-4 text-center text-[11px] text-muted-foreground">
-          TodoList AI v0.1.0 · 数据存储于本机 SQLite（tauri-plugin-sql）
+          {t("settings.footer")}
         </p>
       </div>
     </div>

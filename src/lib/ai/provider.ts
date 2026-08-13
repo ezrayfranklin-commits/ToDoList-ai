@@ -10,6 +10,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { generateText } from "ai";
+import { t } from "@/lib/i18n";
 import type { AISettings } from "@/lib/types";
 import { generatePlainText } from "@/lib/ai/ollama";
 
@@ -66,6 +67,33 @@ export type ProviderId = (typeof PROVIDERS)[number]["id"];
 
 export function providerLabel(id: string): string {
   return PROVIDERS.find((p) => p.id === id)?.label ?? id;
+}
+
+/** i18n-aware provider label/hint (rendered in SettingsPage). */
+export function providerLabelT(id: string): string {
+  switch (id) {
+    case "openai":
+      return t("provider.openai");
+    case "anthropic":
+      return t("provider.anthropic");
+    case "ollama":
+      return t("provider.ollama");
+    default:
+      return id;
+  }
+}
+
+export function providerHintT(id: string): string {
+  switch (id) {
+    case "openai":
+      return t("provider.openaiHint");
+    case "anthropic":
+      return t("provider.anthropicHint");
+    case "ollama":
+      return t("provider.ollamaHint");
+    default:
+      return "";
+  }
 }
 
 /** Shared fetch routed through the Rust HTTP plugin (no CORS, no proxies). */
