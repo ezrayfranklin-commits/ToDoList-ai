@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useUI } from "@/store/ui";
 import { useCreateTask, useDeleteTask, useUpdateTask, useTasks } from "@/hooks/queries";
 import type { Priority } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 export function TaskDialog() {
   const { taskDialog, closeTaskDialog } = useUI();
@@ -62,7 +63,7 @@ export function TaskDialog() {
   const close = () => closeTaskDialog();
 
   const save = async () => {
-    const t = title.trim();
+    const trimmed = title.trim();
     if (!t) return;
     setSaving(true);
     const scheduledDate = date ? format(date, "yyyy-MM-dd") : null;
@@ -72,28 +73,28 @@ export function TaskDialog() {
       if (editing) {
         await updateTask.mutateAsync({
           id: editing.id,
-          title: t,
+          title: trimmed,
           notes: notes || null,
           priority,
           scheduledDate,
           timeBlockStart,
           timeBlockEnd,
         });
-        toast.success("已更新任务");
+        toast.success(t("task.updated"));
       } else {
         await createTask.mutateAsync({
-          title: t,
+          title: trimmed,
           notes: notes || undefined,
           priority,
           status: scheduledDate ? "scheduled" : "inbox",
           scheduledDate,
           source: "manual",
         });
-        toast.success("已添加到 Inbox");
+        toast.success(t("task.addedInbox"));
       }
       close();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "保存失败");
+      toast.error(e instanceof Error ? e.message : t("task.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -102,7 +103,7 @@ export function TaskDialog() {
   const remove = async () => {
     if (!editing) return;
     await deleteTask.mutateAsync(editing.id);
-    toast.success("已删除");
+    toast.success(t("task.deleted"));
     close();
   };
 
@@ -110,49 +111,49 @@ export function TaskDialog() {
     <Dialog open={taskDialog.open} onOpenChange={(o) => !o && close()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? "编辑任务" : "新建任务"}</DialogTitle>
+          <DialogTitle>{editing ? t("task.edit") : t("task.new")}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="task-title">标题</Label>
+            <Label htmlFor="task-title">{t("task.title")}</Label>
             <Input
               id="task-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="要做什么？"
+              placeholder={t("task.titlePlaceholder")}
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && save()}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="task-notes">备注</Label>
+            <Label htmlFor="task-notes">{t("task.notes")}</Label>
             <Textarea
               id="task-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="补充说明（可选）"
+              placeholder={t("task.notesPlaceholder")}
               rows={2}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label>优先级</Label>
+            <Label>{t("task.priority")}</Label>
             <Select value={priority} onValueChange={(v) => setPriority(v as Priority)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="high">高</SelectItem>
-                <SelectItem value="medium">中</SelectItem>
-                <SelectItem value="low">低</SelectItem>
+                <SelectItem value="high">{t("task.high")}</SelectItem>
+                <SelectItem value="medium">{t("task.medium")}</SelectItem>
+                <SelectItem value="low">{t("task.low")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label>计划日期</Label>
+            <Label>{t("task.date")}</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="w-full justify-start font-normal">
-                  {date ? format(date, "yyyy-MM-dd") : "不指定（留在 Inbox）"}
+                  {date ? format(date, "yyyy-MM-dd") : t("task.noDate")}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
@@ -163,10 +164,10 @@ export function TaskDialog() {
                 />
                 <div className="flex gap-2 border-t p-2">
                   <Button variant="ghost" size="sm" className="flex-1" onClick={() => setDate(undefined)}>
-                    清除
+                    {t("task.clear")}
                   </Button>
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => setDate(new Date())}>
-                    今天
+                    {t("task.today")}
                   </Button>
                 </div>
               </PopoverContent>
@@ -181,7 +182,7 @@ export function TaskDialog() {
                   onChange={(e) => setWithTime(e.target.checked)}
                   className="h-3.5 w-3.5 accent-[#4a6cf7]"
                 />
-                指定时间块
+                {t("task.withTime")}
               </Label>
               {withTime && (
                 <div className="flex items-center gap-2">
@@ -206,17 +207,17 @@ export function TaskDialog() {
         <DialogFooter className="gap-2 sm:justify-between">
           {editing ? (
             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={remove}>
-              删除
+              {t("task.delete")}
             </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={close}>
-              取消
+              {t("task.cancel")}
             </Button>
             <Button onClick={save} disabled={saving || !title.trim()}>
-              {saving ? "保存中…" : "保存"}
+              {saving ? t("task.saving") : t("task.save")}
             </Button>
           </div>
         </DialogFooter>

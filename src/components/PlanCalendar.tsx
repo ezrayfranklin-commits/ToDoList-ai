@@ -9,7 +9,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { zhCN } from "date-fns/locale";
 import { CalendarDays, Loader2, Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
@@ -40,6 +39,7 @@ import { useUI } from "@/store/ui";
 import { PriorityBadge } from "@/components/TaskRow";
 import type { TimeBlock } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { t, dateLocale, isZh } from "@/lib/i18n";
 
 export function PlanCalendar({
   open,
@@ -121,7 +121,7 @@ export function PlanCalendar({
             start,
             end: end ?? addMinutesToHHmm(start, 60),
             priority: "medium",
-            effort: "1小时",
+            effort: t("effort.1h"),
             taskId,
             done: false,
           },
@@ -130,9 +130,9 @@ export function PlanCalendar({
       }
       invalidate();
       setNewTitle("");
-      toast.success(`已添加「${title}」`);
+      toast.success(t("calendar.added", { title }));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "添加失败");
+      toast.error(e instanceof Error ? e.message : t("calendar.addFailed"));
     } finally {
       setAdding(false);
     }
@@ -153,13 +153,18 @@ export function PlanCalendar({
       await deleteTask.mutateAsync(b.taskId);
       await removePlanBlock(selectedDate, b.taskId);
       invalidate();
-      toast.success("已删除");
+      toast.success(t("calendar.deleted"));
     }
   };
 
   const isToday = selectedDate === today;
-  const dateLabel = format(new Date(selectedDate + "T00:00:00"), "yyyy年M月d日 EEEE", {
-    locale: zhCN,
+  const dateLabel = format(
+    new Date(selectedDate + "T00:00:00"),
+    isZh() ? "yyyy年M月d日 EEEE" : "EEE, MMM d, yyyy",
+    { locale: dateLocale() },
+  );
+  const dateLabelShort = format(new Date(selectedDate + "T00:00:00"), "MMM d", {
+    locale: dateLocale(),
   });
 
   return (
@@ -168,9 +173,9 @@ export function PlanCalendar({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4" />
-            日历与规划
+            {t("calendar.title")}
             <span className="text-[11px] font-normal text-muted-foreground">
-              有圆点的日期表示当天有规划或任务
+              {t("calendar.hint")}
             </span>
           </DialogTitle>
         </DialogHeader>
@@ -195,12 +200,12 @@ export function PlanCalendar({
                 <span className="text-[14px] font-semibold">{dateLabel}</span>
                 {isToday && (
                   <Badge className="border-accent/30 bg-accent/10 text-[10px] text-accent">
-                    今天
+                    {t("calendar.today")}
                   </Badge>
                 )}
               </div>
               <Badge variant="secondary" className="text-[10px]">
-                {blocks.length} 个时间块
+                {t("calendar.blocks", { count: blocks.length })}
               </Badge>
             </div>
 
@@ -208,7 +213,7 @@ export function PlanCalendar({
             <div className="flex flex-col gap-1.5">
               {blocks.length === 0 ? (
                 <p className="py-3 text-center text-[12px] text-muted-foreground">
-                  这一天还没有规划
+                  {t("calendar.noPlan")}
                 </p>
               ) : (
                 blocks.map((b) => (
@@ -222,7 +227,7 @@ export function PlanCalendar({
                         b.done ? "border-accent bg-accent" : "border-zinc-300 hover:border-accent",
                       )}
                       onClick={() => toggleBlock(b, !b.done)}
-                      aria-label="标记完成"
+                      aria-label={t("calendar.markDone")}
                     >
                       {b.done && (
                         <svg viewBox="0 0 16 16" className="h-4 w-4 text-white" fill="none">
@@ -246,9 +251,9 @@ export function PlanCalendar({
                       onClick={() =>
                         b.taskId != null
                           ? openTaskDialog(b.taskId)
-                          : toast.info("该块尚未关联任务")
+                          : toast.info(t("calendar.blockNoTask"))
                       }
-                      title="点击编辑"
+                      title={t("calendar.edit")}
                     >
                       {b.title}
                     </button>
@@ -256,7 +261,7 @@ export function PlanCalendar({
                     <button
                       onClick={() => removeBlock(b)}
                       className="hidden shrink-0 text-muted-foreground/50 hover:text-destructive group-hover:block"
-                      aria-label="删除"
+                      aria-label={t("calendar.delete")}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -276,7 +281,7 @@ export function PlanCalendar({
             {orphanTasks.length > 0 && (
               <div>
                 <div className="mb-1 text-[11px] font-medium text-muted-foreground">
-                  其他待办 {orphanTasks.length}
+                  {t("calendar.otherTasks", { count: orphanTasks.length })}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   {orphanTasks.map((t) => (
@@ -300,7 +305,7 @@ export function PlanCalendar({
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addTask()}
-                  placeholder={`添加到 ${isToday ? "今天" : dateLabel.slice(0, -5)}…`}
+                  placeholder={`${t("calendar.addHere", { date: isToday ? t("calendar.today") : dateLabelShort })}`}
                   className="h-8 flex-1 text-[12.5px]"
                 />
                 <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
@@ -310,7 +315,7 @@ export function PlanCalendar({
                     onChange={(e) => setWithTime(e.target.checked)}
                     className="h-3 w-3 accent-[#4a6cf7]"
                   />
-                  时间
+                  {t("calendar.time")}
                 </label>
                 {withTime && (
                   <Input
@@ -327,7 +332,7 @@ export function PlanCalendar({
                   disabled={adding || !newTitle.trim()}
                 >
                   {adding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                  添加
+                  {t("calendar.add")}
                 </Button>
               </div>
             </div>

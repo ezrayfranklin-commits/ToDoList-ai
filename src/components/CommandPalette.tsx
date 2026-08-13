@@ -14,6 +14,7 @@ import {
 import { useUI } from "@/store/ui";
 import { useCreateTask, useInboxTasks } from "@/hooks/queries";
 import { toast } from "sonner";
+import { t } from "@/lib/i18n";
 
 export function CommandPalette() {
   const { paletteOpen, openPalette, setView, openTaskDialog } = useUI();
@@ -28,28 +29,28 @@ export function CommandPalette() {
 
   const addToInbox = async (title: string) => {
     await createTask.mutateAsync({ title, status: "inbox", source: "inbox" });
-    toast.success(`已加入 Inbox：「${title}」`);
+    toast.success(t("cmd.addedToInbox", { title }));
     setQuery("");
   };
 
   return (
     <CommandDialog open={paletteOpen} onOpenChange={openPalette}>
       <CommandInput
-        placeholder="输入任务快速加入 Inbox，或搜索操作…"
+        placeholder={t("cmd.placeholder")}
         value={query}
         onValueChange={setQuery}
       />
       <CommandList>
-        <CommandEmpty>没有匹配结果</CommandEmpty>
+        <CommandEmpty>{t("cmd.empty")}</CommandEmpty>
         {quickAdd && (
-          <CommandGroup heading="快速添加">
+          <CommandGroup heading={t("cmd.quickAdd")}>
             <CommandItem value={`add:${query}`} onSelect={() => addToInbox(query)}>
               <Plus className="h-4 w-4" />
-              加入 Inbox：{query}
+              {t("cmd.addToInbox", { title: query })}
             </CommandItem>
           </CommandGroup>
         )}
-        <CommandGroup heading="Inbox 条目">
+        <CommandGroup heading={t("cmd.inboxItems")}>
           {(inbox ?? []).slice(0, 5).map((t) => (
             <CommandItem
               key={t.id}
@@ -64,27 +65,27 @@ export function CommandPalette() {
             </CommandItem>
           ))}
         </CommandGroup>
-        <CommandGroup heading="操作">
+        <CommandGroup heading={t("cmd.actions")}>
           <CommandItem value="go:today" onSelect={() => { setView("today"); openPalette(false); }}>
             <CalendarCheck2 className="h-4 w-4" />
-            前往今日计划
+            {t("cmd.goToday")}
           </CommandItem>
           <CommandItem value="go:inbox" onSelect={() => { setView("inbox"); openPalette(false); }}>
             <Inbox className="h-4 w-4" />
-            前往 Inbox
+            {t("cmd.goInbox")}
           </CommandItem>
           <CommandItem value="go:review" onSelect={() => { setView("review"); openPalette(false); }}>
             <ListChecks className="h-4 w-4" />
-            前往复盘
+            {t("cmd.goReview")}
           </CommandItem>
           <CommandItem value="go:settings" onSelect={() => { setView("settings"); openPalette(false); }}>
             <Settings className="h-4 w-4" />
-            前往设置
+            {t("cmd.goSettings")}
           </CommandItem>
         </CommandGroup>
         <div className="flex items-center gap-1.5 border-t px-3 py-2 text-[11px] text-muted-foreground">
           <Search className="h-3 w-3" />
-          Enter 添加 · 任意时刻按 ⌘K 唤起
+          {t("cmd.footer")}
         </div>
       </CommandList>
     </CommandDialog>

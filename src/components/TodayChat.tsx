@@ -50,6 +50,7 @@ import { useSettings } from "@/store/settings";
 import { useUI } from "@/store/ui";
 import { useChatRun } from "@/store/chat";
 import { cn } from "@/lib/utils";
+import { t, lang } from "@/lib/i18n";
 
 /**
  * AI 消息渲染：react-markdown 排版（列表/粗体/表格窄屏友好）。
@@ -65,24 +66,32 @@ function MarkdownContent({ text }: { text: string }) {
 
 function timeGreeting(): string {
   const h = new Date().getHours();
-  if (h >= 5 && h < 12) return "早上好";
-  if (h >= 12 && h < 18) return "中午好";
-  return "晚上好";
+  if (h >= 5 && h < 12) return t("chat.greeting.morning");
+  if (h >= 12 && h < 18) return t("chat.greeting.noon");
+  return t("chat.greeting.evening");
 }
 
 function greeting(planStatus: ChatContext["planStatus"], blockCount: number): string {
   switch (planStatus) {
     case "draft":
-      return `AI 已生成今日计划草稿（${blockCount} 个时间块）。可以直接说「确认」，或拖拽右侧时间块调整。`;
+      return t("chat.greeting.draft", { count: blockCount });
     case "confirmed":
-      return "今日计划已确认，开工吧！可以随时对我说：「加任务：…」「把 … 顺延到明天」「完成 …」。";
+      return t("chat.greeting.confirmed");
     default:
-      return `${timeGreeting()}！我是你的 AI 助手。可以问我问题（我会联网搜索），或直接吩咐我记任务、改任务。`;
+      return t("chat.greeting.default", { greeting: timeGreeting() });
   }
 }
 
 /** 基于搜索结果的回答生成（搜索工具后的第二阶段, 引用来源）。 */
-const SEARCH_ANSWER_SYSTEM = `你是 TodoList AI 的 AI 助手。用户问了一个需要联网的问题，以下是搜索到的资料。
+const SEARCH_ANSWER_SYSTEM = () =>
+  lang() === "en"
+    ? `You are the AI assistant of TodoList AI. The user asked a question that needs web search, and below are the search results.
+Please answer in English:
+1. Base your answer on the search results; do not make things up;
+2. Mark the source number after each relevant sentence, e.g. [1];
+3. End with a "Sources:" list (number + title + URL), at most 5 items;
+4. If the results are insufficient, say so clearly and give what partial info you can.`
+    : `你是 TodoList AI 的 AI 助手。用户问了一个需要联网的问题，以下是搜索到的资料。
 请用中文回答用户问题：
 1. 基于搜索结果作答，不要编造；
 2. 在相关句子后标注来源序号，如 [1]；
@@ -172,14 +181,14 @@ export function TodayChat() {
         const res = await runPlanning(today);
         invalidateAll();
         if (!res.ok) {
-          return `规划失败了：${res.error}。请到「设置」里检查模型与 API 配置。`;
+          return t("chat.planFailed", { error: res.error });
         }
         const n = res.plan?.data?.timeBlocks.length ?? 0;
-        return `已生成今日计划草稿（${n} 个时间块），确认无误后点右侧「确认计划」，或继续让我调整。`;
+        return t("chat.planDone", { count: n });
       }
       case "add_task": {
         const title = intent.taskTitle || raw.replace(/^加(?:个)?任务[:：]?\s*/, "").trim();
-        if (!title) return "没听清要记什么任务，试试「加任务：买咖啡」。";
+        if (!title) return t("chat.addNoTitle");
         // 排期语义: 日期 + 时刻（模型填的优先，再从原文兜底解析）
         const scheduledDate = intent.scheduledDate
           ? parseTarget(intent.scheduledDate)
@@ -206,7 +215,7 @@ export function TodayChat() {
             start,
             end: end ?? addMinutesToHHmm(start, 60),
             priority: "medium",
-            effort: "1小时",
+            effort: t("effort.1h"),
             taskId,
             done: false,
           });
@@ -214,45 +223,49 @@ export function TodayChat() {
         }
         const when =
           scheduledDate === today
-            ? "今天"
+            ? t("chat.today")
             : scheduledDate === tomorrowStr()
-              ? "明天"
+              ? t("chat.tomorrow")
               : scheduledDate ?? "";
         if (insertedBlock) {
-          return `已把「${title}」排进今日计划 ${start}–${end} ✅（右侧时间块已更新）`;
+          return t("chat.addedToday", { title, start, end });
         }
         if (when) {
-          return `已把「${title}」排到 ${when}${start ? ` ${start}–${end}` : ""}（右侧「其他待办」可见）`;
+          return t("chat.addedWhen", {
+            title,
+            when,
+            time: start ? ` ${start}–${end}` : "",
+          });
         }
-        return `已把「${title}」加入 Inbox，之后的每日规划会帮你安排它。`;
+        return t("chat.addedInbox", { title });
       }
       case "complete": {
-        const t = findTask(intent.taskTitle, tasks, inboxTasks);
-        if (!t) return `没有找到「${intent.taskTitle}」相关的任务。`;
-        await toggleTask.mutateAsync({ id: t.id, done: true });
+        const found = findTask(intent.taskTitle, tasks, inboxTasks);
+        if (!found) return t("chat.notFound", { title: intent.taskTitle });
+        await toggleTask.mutateAsync({ id: found.id, done: true });
         invalidateAll();
-        return `已完成「${t.title}」，干得漂亮 🎉`;
+        return t("chat.completed", { title: found.title });
       }
       case "reschedule": {
-        const t = findTask(intent.taskTitle, tasks, inboxTasks);
-        if (!t) return `没有找到「${intent.taskTitle}」相关的任务。`;
+        const found = findTask(intent.taskTitle, tasks, inboxTasks);
+        if (!found) return t("chat.notFound", { title: intent.taskTitle });
         const target = parseTarget(intent.target);
         await updateTask.mutateAsync({
-          id: t.id,
+          id: found.id,
           scheduledDate: target,
           timeBlockStart: null,
           timeBlockEnd: null,
         });
         invalidateAll();
-        const label = target === today ? "今天" : target === tomorrowStr() ? "明天" : target;
-        return `已把「${t.title}」改到 ${label}。`;
+        const label = target === today ? t("chat.today") : target === tomorrowStr() ? t("chat.tomorrow") : target;
+        return t("chat.rescheduled", { title: found.title, date: label });
       }
       case "delete": {
-        const t = findTask(intent.taskTitle, tasks, inboxTasks);
-        if (!t) return `没有找到「${intent.taskTitle}」相关的任务。`;
-        await deleteTask.mutateAsync(t.id);
+        const found = findTask(intent.taskTitle, tasks, inboxTasks);
+        if (!found) return t("chat.notFound", { title: intent.taskTitle });
+        await deleteTask.mutateAsync(found.id);
         invalidateAll();
-        return `已删除「${t.title}」。`;
+        return t("chat.deleted", { title: found.title });
       }
       case "general": {
         // 工具调用: 模型判断需要搜索 -> 执行 DuckDuckGo -> 结果交给模型回答
@@ -261,7 +274,7 @@ export function TodayChat() {
           if (results.length > 0) {
             const answer = await generatePlainText({
               settings,
-              system: SEARCH_ANSWER_SYSTEM,
+              system: SEARCH_ANSWER_SYSTEM(),
               prompt:
                 `用户问题：${raw}\n\n搜索结果（${engine}）：\n` +
                 results
@@ -275,12 +288,12 @@ export function TodayChat() {
             });
             return answer.trim();
           }
-          return (
-            `搜索「${intent.searchQuery}」没有结果${error ? `（${error.split("\n")[1] ?? ""}）` : ""}。` +
-            "换个说法试试，或告诉我具体想了解什么。"
-          );
+          return t("chat.searchNoResult", {
+            query: intent.searchQuery,
+            err: error ? `（${error.split("\n")[1] ?? ""}）` : "",
+          });
         }
-        return intent.reply || "收到。";
+        return intent.reply || t("chat.received");
       }
     }
   };
@@ -433,7 +446,7 @@ export function TodayChat() {
           await addMessage.mutateAsync({
             conversationId: convId,
             role: "ai",
-            content: "⏹ 已停止生成，可以继续提问。",
+            content: t("chat.stopped"),
           });
         }
       } else {
@@ -446,7 +459,7 @@ export function TodayChat() {
             const reply = await execute(intent, text);
             await addMessage.mutateAsync({ conversationId: convId, role: "ai", content: reply });
           } catch (e2) {
-            toast.error(e2 instanceof Error ? e2.message : "发送失败");
+            toast.error(e2 instanceof Error ? e2.message : t("chat.sendFailed"));
           }
         }
       }
@@ -460,7 +473,7 @@ export function TodayChat() {
     chatRun.stopRun();
   };
 
-  const chips = [{ label: "加任务", cmd: "加任务：" }];
+  const chips = [{ label: t("chat.chip.addTask"), cmd: "加任务：" }];
 
   const chipClick = (cmd: string) => {
     // 预填输入框，让用户补全任务名（避免发送空指令）
@@ -477,7 +490,7 @@ export function TodayChat() {
           <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-accent/10 text-accent">
             <MessageSquareText className="h-3.5 w-3.5" />
           </span>
-          AI 助手
+          AI {t("chat.title")}
         </span>
       </div>
 
@@ -532,7 +545,7 @@ export function TodayChat() {
             </span>
             <div className="flex items-center gap-1.5 rounded-xl rounded-bl-sm border border-border bg-card px-3 py-2.5 shadow-sm">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-              <span className="text-[12px] text-muted-foreground">思考中…</span>
+              <span className="text-[12px] text-muted-foreground">{t("chat.thinking")}</span>
             </div>
           </div>
         )}
@@ -560,7 +573,7 @@ export function TodayChat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="对 AI 说：加任务：买咖啡 / 把报告顺延到明天…"
+            placeholder={t("chat.placeholder")}
             className="h-9 bg-card text-[13px]"
           />
           {busy ? (
@@ -569,8 +582,8 @@ export function TodayChat() {
               size="icon"
               className="h-9 w-9 shrink-0 bg-destructive text-white hover:bg-destructive/90"
               onClick={stop}
-              aria-label="停止生成"
-              title="停止生成"
+              aria-label={t("chat.stop")}
+              title={t("chat.stop")}
             >
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
@@ -580,7 +593,7 @@ export function TodayChat() {
               className="h-9 w-9 shrink-0"
               onClick={() => send()}
               disabled={!input.trim()}
-              aria-label="发送"
+              aria-label={t("chat.send")}
             >
               <Send className="h-4 w-4" />
             </Button>

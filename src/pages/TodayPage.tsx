@@ -40,6 +40,7 @@ import { TodayChat } from "@/components/TodayChat";
 import { PlanCalendar } from "@/components/PlanCalendar";
 import type { TimeBlock } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 function SortableBlock({
   block,
@@ -70,7 +71,7 @@ function SortableBlock({
         className="cursor-grab touch-none text-muted-foreground/50 hover:text-muted-foreground"
         {...attributes}
         {...listeners}
-        aria-label="拖拽排序"
+        aria-label={t("today.dragSort")}
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -93,7 +94,7 @@ function SortableBlock({
           e.stopPropagation();
           onToggle(!block.done);
         }}
-        aria-label="标记完成"
+        aria-label={t("today.markDone")}
       >
         {block.done && (
           <svg viewBox="0 0 16 16" className="h-4 w-4 text-white" fill="none">
@@ -105,7 +106,7 @@ function SortableBlock({
         {current && !block.done && (
           <div className="mb-0.5 flex items-center gap-1 text-[10px] font-semibold text-accent">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-            现在进行中
+            {t("today.inProgress")}
           </div>
         )}
         <div
@@ -121,7 +122,7 @@ function SortableBlock({
           <div className="text-[10.5px] text-muted-foreground">{block.effort}</div>
         )}
         {overdue && !block.done && (
-          <div className="text-[10px] font-medium text-red-500">⏰ 已超时，记得点勾完成</div>
+          <div className="text-[10px] font-medium text-red-500">{t("today.overdue")}</div>
         )}
       </div>
       <PriorityBadge priority={block.priority} />
@@ -224,11 +225,11 @@ export function TodayPage() {
         {/* 冻结区: 标题 + 日历按钮(不随下面内容滚动) */}
         <div className="flex shrink-0 flex-col gap-3 pb-3">
         <div>
-          <h1 className="text-[15px] font-bold tracking-tight">今日规划</h1>
+          <h1 className="text-[15px] font-bold tracking-tight">{t("today.title")}</h1>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
             {displayDate(new Date())}
             <span className="mx-1.5">·</span>
-            待办池 {backlogCount} 项
+            {t("today.backlog", { count: backlogCount })}
           </p>
         </div>
 
@@ -238,7 +239,7 @@ export function TodayPage() {
           className="w-full gap-1.5"
         >
           <CalendarDays className="h-4 w-4" />
-          日历
+          {t("today.calendar")}
         </Button>
 
         <PlanCalendar open={calendarOpen} onOpenChange={setCalendarOpen} />
@@ -266,7 +267,7 @@ export function TodayPage() {
                     onClick={() =>
                       b.taskId != null
                         ? openTaskDialog(b.taskId)
-                        : toast.info("该时间块尚未关联任务")
+                        : toast.info(t("today.blockNoTask"))
                     }
                     overdue={isOverdue(b)}
                     current={isCurrent(b)}
@@ -282,9 +283,9 @@ export function TodayPage() {
                 <CalendarDays className="h-4.5 w-4.5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-[12.5px] font-medium">今天还没有计划</p>
+                <p className="text-[12.5px] font-medium">{t("today.noPlan")}</p>
                 <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-                  对中间的 AI 说「加任务：…」添加待办
+                  {t("today.noPlanHint")}
                 </p>
               </div>
             </CardContent>
@@ -302,7 +303,7 @@ export function TodayPage() {
         {orphanTasks.length > 0 && (
           <div>
             <div className="mb-2 flex items-center gap-2">
-              <h2 className="text-[12.5px] font-semibold">其他待办</h2>
+              <h2 className="text-[12.5px] font-semibold">{t("today.otherTasks")}</h2>
               <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
                 {orphanTasks.length}
               </Badge>
@@ -326,7 +327,7 @@ export function TodayPage() {
           onClick={() => setView("inbox")}
         >
           <Plus className="h-3.5 w-3.5" />
-          新想法先丢进 Inbox
+          {t("today.goInbox")}
           <Inbox className="h-3.5 w-3.5" />
         </button>
         </div>

@@ -2,6 +2,7 @@
 // 任何子组件渲染异常时展示错误卡片 + 恢复按钮，而不是整页空白。
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { t } from "@/lib/i18n";
 
 interface Props {
   children: ReactNode;
@@ -36,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
           overflow: "auto",
         }}
       >
-        <h2 style={{ fontSize: 16, marginBottom: 8 }}>页面出错了</h2>
+        <h2 style={{ fontSize: 16, marginBottom: 8 }}>{t("error.title")}</h2>
         <pre
           style={{
             whiteSpace: "pre-wrap",
@@ -62,7 +63,7 @@ export class ErrorBoundary extends Component<Props, State> {
             cursor: "pointer",
           }}
         >
-          重试
+          {t("error.retry")}
         </button>
       </div>
     );

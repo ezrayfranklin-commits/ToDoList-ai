@@ -4,6 +4,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "@/lib/db";
 import { removePlanBlock } from "@/lib/planBlocks";
+import { t } from "@/lib/i18n";
 import type {
   DailyPlan,
   Goal,
@@ -430,7 +431,8 @@ export function useCreateConversation() {
   return useMutation({
     mutationFn: async (): Promise<number> => {
       const res = await getDb().execute(
-        "INSERT INTO chat_conversations (title) VALUES ('新对话')",
+        "INSERT INTO chat_conversations (title) VALUES ($1)",
+        [t("sidebar.newChat")],
       );
       return Number(res.lastInsertId ?? 0);
     },

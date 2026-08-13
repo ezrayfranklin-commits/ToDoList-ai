@@ -33,6 +33,7 @@ import { runPlanning } from "@/lib/agent";
 import { todayStr } from "@/lib/dates";
 import { TaskRow } from "@/components/TaskRow";
 import type { Task } from "@/lib/types";
+import { t } from "@/lib/i18n";
 
 function SortableInboxRow({
   task,
@@ -57,7 +58,7 @@ function SortableInboxRow({
               className="cursor-grab touch-none text-muted-foreground/50 hover:text-muted-foreground"
               {...attributes}
               {...listeners}
-              aria-label="拖拽排序"
+              aria-label={t("inbox.dragSort")}
             >
               <GripVertical className="h-4 w-4" />
             </button>
@@ -80,11 +81,11 @@ export function InboxPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const add = async () => {
-    const t = text.trim();
+    const trimmed = text.trim();
     if (!t) return;
-    await createTask.mutateAsync({ title: t, status: "inbox", source: "inbox" });
+    await createTask.mutateAsync({ title: trimmed, status: "inbox", source: "inbox" });
     setText("");
-    toast.success("已收集到 Inbox");
+    toast.success(t("inbox.added"));
   };
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -100,8 +101,8 @@ export function InboxPage() {
     setPlanning(true);
     const res = await runPlanning(todayStr());
     setPlanning(false);
-    if (res.ok) toast.success("AI 已处理 Inbox 并生成今日计划");
-    else toast.error(`规划失败：${res.error}`);
+    if (res.ok) toast.success(t("inbox.processed"));
+    else toast.error(t("inbox.planFailed", { error: res.error }));
   };
 
   return (
@@ -110,13 +111,13 @@ export function InboxPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Inbox</h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            零成本收集想法，之后交给 AI 归类排期
+            {t("inbox.subtitle")}
           </p>
         </div>
         {(inbox?.length ?? 0) > 0 && (
           <Button variant="outline" onClick={handToAgent} disabled={planning} className="gap-1.5">
             {planning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            交给 AI 归类
+            {t("inbox.handToAgent")}
           </Button>
         )}
       </div>
@@ -125,13 +126,13 @@ export function InboxPage() {
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="随手记下想法，回车加入 Inbox…"
+          placeholder={t("inbox.placeholder")}
           onKeyDown={(e) => e.key === "Enter" && add()}
           className="bg-card"
         />
         <Button onClick={add} disabled={!text.trim()} className="gap-1.5">
           <Plus className="h-4 w-4" />
-          添加
+          {t("inbox.add")}
         </Button>
       </div>
 
@@ -146,9 +147,9 @@ export function InboxPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-lg">
               📥
             </div>
-            <p className="text-[13px] font-medium">Inbox 是空的</p>
+            <p className="text-[13px] font-medium">{t("inbox.empty")}</p>
             <p className="text-[12px] text-muted-foreground">
-              想到什么先记下来，AI 会在每日规划时帮你归类
+              {t("inbox.emptyHint")}
             </p>
           </CardContent>
         </Card>

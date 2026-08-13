@@ -9,12 +9,13 @@ import { planProgress, planDoneCount, planTotalCount } from "@/lib/ai/plan";
 import { todayStr } from "@/lib/dates";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { t } from "@/lib/i18n";
 
-const NAV: Array<{ view: View; label: string; icon: typeof Inbox }> = [
-  { view: "today", label: "今日计划", icon: CalendarCheck2 },
-  { view: "inbox", label: "Inbox", icon: Inbox },
-  { view: "review", label: "复盘", icon: ListChecks },
-  { view: "settings", label: "设置", icon: Settings },
+const NAV: Array<{ view: View; label: () => string; icon: typeof Inbox }> = [
+  { view: "today", label: () => t("nav.today"), icon: CalendarCheck2 },
+  { view: "inbox", label: () => t("nav.inbox"), icon: Inbox },
+  { view: "review", label: () => t("nav.review"), icon: ListChecks },
+  { view: "settings", label: () => t("nav.settings"), icon: Settings },
 ];
 
 export function Sidebar() {
@@ -47,7 +48,7 @@ export function Sidebar() {
       const rest = (conversations ?? []).filter((c) => c.id !== id);
       setCurrentConversation(rest[0]?.id ?? null);
     }
-    toast.success("对话已删除");
+    toast.success(t("sidebar.chatDeleted"));
   };
 
   return (
@@ -59,7 +60,7 @@ export function Sidebar() {
         </div>
         <div className="min-w-0">
           <div className="truncate text-[13px] font-semibold leading-tight">TodoList AI</div>
-          <div className="text-[11px] text-muted-foreground">每日 AI 规划</div>
+          <div className="text-[11px] text-muted-foreground">{t("sidebar.subtitle")}</div>
         </div>
       </div>
 
@@ -68,17 +69,17 @@ export function Sidebar() {
         className="mb-4 flex items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[12.5px] font-medium text-foreground transition-colors duration-200 hover:border-accent hover:text-accent"
       >
         <Plus className="h-3.5 w-3.5" />
-        新建对话
+        {t("sidebar.newChat")}
       </button>
 
       {/* ChatGPT 式会话历史 */}
       <div className="mb-1 px-2 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
-        对话历史
+        {t("sidebar.chatHistory")}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pr-0.5">
         {(conversations ?? []).length === 0 ? (
           <p className="px-2 py-3 text-[11px] leading-relaxed text-muted-foreground">
-            还没有对话。点「新建对话」开始，或直接对中央的 AI 说话。
+            {t("sidebar.emptyChats")}
           </p>
         ) : (
           (conversations ?? []).map((c) => {
@@ -104,7 +105,7 @@ export function Sidebar() {
                   onClick={(e) => removeChat(e, c.id)}
                   onKeyDown={(e) => e.key === "Enter" && removeChat(e as unknown as React.MouseEvent, c.id)}
                   className="hidden shrink-0 rounded p-0.5 text-muted-foreground/60 hover:text-destructive group-hover:block"
-                  aria-label="删除对话"
+                  aria-label={t("sidebar.deleteChat")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </span>
@@ -131,7 +132,7 @@ export function Sidebar() {
               )}
             >
               <Icon className="h-4 w-4" />
-              {item.label}
+              {item.label()}
             </button>
           );
         })}
@@ -140,7 +141,7 @@ export function Sidebar() {
       {/* 今日进度 */}
       <div className="rounded-xl bg-card p-3">
         <div className="mb-2 flex items-baseline justify-between">
-          <span className="text-[11px] font-medium text-muted-foreground">今日进度</span>
+          <span className="text-[11px] font-medium text-muted-foreground">{t("sidebar.todayProgress")}</span>
           <span className="text-[11px] tabular-nums text-muted-foreground">
             {plan ? `${done}/${total}` : `${taskDone}/${taskTotal}`}
           </span>
@@ -151,7 +152,7 @@ export function Sidebar() {
         />
         {!plan && taskTotal === 0 && (
           <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-            点击 ⌘K 开始
+            {t("sidebar.startHint")}
           </p>
         )}
       </div>
