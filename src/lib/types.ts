@@ -115,4 +115,5 @@ export interface AISettings {
   notifications: boolean;
   carryOver: boolean;
   autoReview: boolean;
+  lang: "zh" | "en";
 }

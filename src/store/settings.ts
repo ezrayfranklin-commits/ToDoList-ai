@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { getAllSettings, setSetting } from "@/lib/db";
 import type { AISettings } from "@/lib/types";
+import { useI18n } from "@/lib/i18n";
 
 interface SettingsState extends AISettings {
   loaded: boolean;
@@ -12,6 +13,7 @@ interface SettingsState extends AISettings {
   setAutoPlan: (v: boolean) => Promise<void>;
   setNotifications: (v: boolean) => Promise<void>;
   setCarryOver: (v: boolean) => Promise<void>;
+  setLang: (v: "zh" | "en") => Promise<void>;
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
@@ -23,6 +25,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
   notifications: true,
   carryOver: true,
   autoReview: true,
+  lang: "zh",
   loaded: false,
 
   load: async () => {
@@ -36,8 +39,10 @@ export const useSettings = create<SettingsState>((set, get) => ({
       notifications: (all["notifications"] as boolean) ?? true,
       carryOver: (all["carryOver"] as boolean) ?? true,
       autoReview: (all["autoReview"] as boolean) ?? true,
+      lang: (all["ui.lang"] as "zh" | "en") ?? "zh",
       loaded: true,
     });
+    useI18n.getState().initLang((all["ui.lang"] as "zh" | "en") ?? "zh");
   },
 
   update: async (patch) => {
@@ -52,6 +57,7 @@ export const useSettings = create<SettingsState>((set, get) => ({
       ["notifications", next.notifications],
       ["carryOver", next.carryOver],
       ["autoReview", next.autoReview],
+      ["ui.lang", next.lang],
     ];
     for (const [k, v] of kv) await setSetting(k, v);
   },
@@ -67,5 +73,10 @@ export const useSettings = create<SettingsState>((set, get) => ({
   setCarryOver: async (v) => {
     set({ carryOver: v });
     await setSetting("carryOver", v);
+  },
+  setLang: async (v) => {
+    set({ lang: v });
+    useI18n.getState().setLang(v);
+    await setSetting("ui.lang", v);
   },
 }));

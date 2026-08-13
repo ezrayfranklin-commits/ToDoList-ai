@@ -7,7 +7,10 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { zhCN, enUS } from "date-fns/locale"
+import { lang } from "@/lib/i18n";
+
+const loc = () => (lang() === "zh" ? zhCN : enUS);
 
 export const todayStr = (): string => format(new Date(), "yyyy-MM-dd");
 
@@ -15,7 +18,8 @@ export const toDateStr = (d: Date): string => format(d, "yyyy-MM-dd");
 
 export const displayDate = (d: Date | string): string => {
   const date = typeof d === "string" ? parseISO(d) : d;
-  return format(date, "M月d日 EEEE", { locale: zhCN });
+  const fmt = lang() === "zh" ? "M月d日 EEEE" : "EEE, MMM d";
+  return format(date, fmt, { locale: loc() });
 };
 
 export const isToday = (dateStr: string): boolean =>
@@ -24,7 +28,7 @@ export const isToday = (dateStr: string): boolean =>
 export const tomorrowStr = (): string => toDateStr(addDays(startOfDay(new Date()), 1));
 
 export const weekdayCN = (d: Date): string =>
-  format(d, "EEEE", { locale: zhCN });
+  format(d, "EEEE", { locale: loc() });
 
 /** Current time as HH:mm */
 export const nowHHmm = (): string => format(new Date(), "HH:mm");
